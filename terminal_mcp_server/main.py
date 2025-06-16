@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, AsyncGenerator, Any
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Request, Response, Depends
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -200,213 +200,221 @@ mcp_connections = {}
 
 
 @app.get("/mcp/manifest")
+@app.get("/manifest")  # Also support without the /mcp prefix
 async def mcp_manifest():
     """Return the MCP manifest for this server as a Server-Sent Event."""
-    connection_id = str(uuid.uuid4())
-    logger.info(f"New MCP manifest connection: {connection_id}")
+    logger.info("Received request for MCP manifest")
     
-    manifest = {
-        "schema_version": "v1",
-        "name": "terminal-use",
-        "display_name": "Terminal Use",
-        "description": "Allows AI agents to interact with terminal-based applications",
-        "tools": [
-            {
-                "name": "run_command",
-                "description": "Run a command in a terminal",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "command": {
-                            "type": "string",
-                            "description": "The command to run"
-                        },
-                        "timeout": {
-                            "type": "integer",
-                            "description": "Timeout in seconds",
-                            "default": 30
-                        },
-                        "session_id": {
-                            "type": "string",
-                            "description": "Optional session ID for the terminal session"
-                        },
-                        "use_terminal_emulator": {
-                            "type": "boolean",
-                            "description": "Whether to use a terminal emulator for TUI applications",
-                            "default": True
-                        },
-                        "terminal_emulator": {
-                            "type": "string",
-                            "description": "Terminal emulator to use (xterm, gnome-terminal, konsole, tmux)",
-                            "enum": ["xterm", "gnome-terminal", "konsole", "tmux", None],
-                            "default": None
-                        }
-                    },
-                    "required": ["command"]
-                },
-                "output_schema": {
-                    "type": "object",
-                    "properties": {
-                        "session_id": {
-                            "type": "string",
-                            "description": "The session ID for the terminal session"
-                        },
-                        "output": {
-                            "type": "string",
-                            "description": "The output from the terminal"
-                        },
-                        "exit_code": {
-                            "type": "integer",
-                            "description": "The exit code of the command, if completed"
-                        },
-                        "running": {
-                            "type": "boolean",
-                            "description": "Whether the command is still running"
-                        }
-                    }
-                }
-            },
-            {
-                "name": "send_input",
-                "description": "Send input to a running terminal session",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "session_id": {
-                            "type": "string",
-                            "description": "The session ID for the terminal session"
-                        },
-                        "input": {
-                            "type": "string",
-                            "description": "The input to send to the terminal"
-                        }
-                    },
-                    "required": ["session_id", "input"]
-                },
-                "output_schema": {
-                    "type": "object",
-                    "properties": {
-                        "session_id": {
-                            "type": "string",
-                            "description": "The session ID for the terminal session"
-                        },
-                        "output": {
-                            "type": "string",
-                            "description": "The output from the terminal after sending input"
-                        },
-                        "exit_code": {
-                            "type": "integer",
-                            "description": "The exit code of the command, if completed"
-                        },
-                        "running": {
-                            "type": "boolean",
-                            "description": "Whether the command is still running"
-                        }
-                    }
-                }
-            },
-            {
-                "name": "get_session",
-                "description": "Get the current state of a terminal session",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "session_id": {
-                            "type": "string",
-                            "description": "The session ID for the terminal session"
-                        },
-                        "raw_output": {
-                            "type": "boolean",
-                            "description": "Whether to return raw output with ANSI escape sequences",
-                            "default": None
-                        }
-                    },
-                    "required": ["session_id"]
-                },
-                "output_schema": {
-                    "type": "object",
-                    "properties": {
-                        "session_id": {
-                            "type": "string",
-                            "description": "The session ID for the terminal session"
-                        },
-                        "output": {
-                            "type": "string",
-                            "description": "The current output from the terminal"
-                        },
-                        "exit_code": {
-                            "type": "integer",
-                            "description": "The exit code of the command, if completed"
-                        },
-                        "running": {
-                            "type": "boolean",
-                            "description": "Whether the command is still running"
-                        }
-                    }
-                }
-            },
-            {
-                "name": "terminate_session",
-                "description": "Terminate a terminal session",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "session_id": {
-                            "type": "string",
-                            "description": "The session ID for the terminal session to terminate"
-                        }
-                    },
-                    "required": ["session_id"]
-                },
-                "output_schema": {
-                    "type": "object",
-                    "properties": {
-                        "message": {
-                            "type": "string",
-                            "description": "Confirmation message"
-                        }
-                    }
-                }
-            },
-            {
-                "name": "list_sessions",
-                "description": "List all active terminal sessions",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {}
-                },
-                "output_schema": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "description": "List of active session IDs"
-                }
-            }
-        ]
-    }
-
     async def generate():
-        # Send manifest event
-        manifest_json = json.dumps(manifest)
-        logger.debug(f"Sending manifest event: {manifest_json[:100]}...")
-        yield f"event: manifest\ndata: {manifest_json}\n\n"
+        # First send the manifest without an event type
+        manifest = {
+            "schema_version": "v1",
+            "name": "terminal-use",
+            "display_name": "Terminal Use",
+            "description": "Allows AI agents to interact with terminal-based applications",
+            "tools": [
+                {
+                    "name": "run_command",
+                    "description": "Run a command in a terminal",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            "command": {
+                                "type": "string",
+                                "description": "The command to run"
+                            },
+                            "timeout": {
+                                "type": "integer",
+                                "description": "Timeout in seconds",
+                                "default": 30
+                            },
+                            "session_id": {
+                                "type": "string",
+                                "description": "Optional session ID for the terminal session"
+                            },
+                            "use_terminal_emulator": {
+                                "type": "boolean",
+                                "description": "Whether to use a terminal emulator for TUI applications",
+                                "default": True
+                            },
+                            "terminal_emulator": {
+                                "type": "string",
+                                "description": "Terminal emulator to use (xterm, gnome-terminal, konsole, tmux)",
+                                "enum": ["xterm", "gnome-terminal", "konsole", "tmux", None],
+                                "default": None
+                            }
+                        },
+                        "required": ["command"]
+                    },
+                    "output_schema": {
+                        "type": "object",
+                        "properties": {
+                            "session_id": {
+                                "type": "string",
+                                "description": "The session ID for the terminal session"
+                            },
+                            "output": {
+                                "type": "string",
+                                "description": "The output from the terminal"
+                            },
+                            "exit_code": {
+                                "type": "integer",
+                                "description": "The exit code of the command, if completed"
+                            },
+                            "running": {
+                                "type": "boolean",
+                                "description": "Whether the command is still running"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "send_input",
+                    "description": "Send input to a running terminal session",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            "session_id": {
+                                "type": "string",
+                                "description": "The session ID for the terminal session"
+                            },
+                            "input": {
+                                "type": "string",
+                                "description": "The input to send to the terminal"
+                            }
+                        },
+                        "required": ["session_id", "input"]
+                    },
+                    "output_schema": {
+                        "type": "object",
+                        "properties": {
+                            "session_id": {
+                                "type": "string",
+                                "description": "The session ID for the terminal session"
+                            },
+                            "output": {
+                                "type": "string",
+                                "description": "The output from the terminal after sending input"
+                            },
+                            "exit_code": {
+                                "type": "integer",
+                                "description": "The exit code of the command, if completed"
+                            },
+                            "running": {
+                                "type": "boolean",
+                                "description": "Whether the command is still running"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "get_session",
+                    "description": "Get the current state of a terminal session",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            "session_id": {
+                                "type": "string",
+                                "description": "The session ID for the terminal session"
+                            },
+                            "raw_output": {
+                                "type": "boolean",
+                                "description": "Whether to return raw output with ANSI escape sequences",
+                                "default": None
+                            }
+                        },
+                        "required": ["session_id"]
+                    },
+                    "output_schema": {
+                        "type": "object",
+                        "properties": {
+                            "session_id": {
+                                "type": "string",
+                                "description": "The session ID for the terminal session"
+                            },
+                            "output": {
+                                "type": "string",
+                                "description": "The current output from the terminal"
+                            },
+                            "exit_code": {
+                                "type": "integer",
+                                "description": "The exit code of the command, if completed"
+                            },
+                            "running": {
+                                "type": "boolean",
+                                "description": "Whether the command is still running"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "terminate_session",
+                    "description": "Terminate a terminal session",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            "session_id": {
+                                "type": "string",
+                                "description": "The session ID for the terminal session to terminate"
+                            }
+                        },
+                        "required": ["session_id"]
+                    },
+                    "output_schema": {
+                        "type": "object",
+                        "properties": {
+                            "message": {
+                                "type": "string",
+                                "description": "Confirmation message"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "list_sessions",
+                    "description": "List all active terminal sessions",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {}
+                    },
+                    "output_schema": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "List of active session IDs"
+                    }
+                }
+            ]
+        }
         
-        # Send ready event
+        manifest_json = json.dumps(manifest)
+        logger.debug(f"Sending manifest data: {manifest_json[:100]}...")
+        yield f"data: {manifest_json}\n\n"
+        
+        # Then immediately send the ready event
         logger.debug("Sending ready event")
         yield "event: ready\ndata: {}\n\n"
         
-        # Keep the connection alive with heartbeat events
+        # Keep connection alive with heartbeats
         counter = 0
         while True:
-            await asyncio.sleep(5)  # Reduced from 15 to 5 seconds for faster feedback
+            await asyncio.sleep(3)
             counter += 1
             logger.debug(f"Sending heartbeat event #{counter}")
             yield "event: heartbeat\ndata: {}\n\n"
     
+    # Set response headers for SSE
+    headers = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",  # Disable buffering for nginx
+    }
+    
     return StreamingResponse(
         generate(),
-        media_type="text/event-stream"
+        media_type="text/event-stream",
+        headers=headers
     )
 
 
@@ -443,27 +451,33 @@ async def mcp_initialize(request: Request):
             }
         }
         logger.info(f"MCP initialize response: {response}")
-        return response
+        
+        # Return with specific headers
+        return JSONResponse(
+            content=response,
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+            }
+        )
     except Exception as e:
         logger.error(f"Error in MCP initialize: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Also support the initialize endpoint without the /mcp prefix
-@app.post("/initialize")
-async def initialize_compat(request: Request):
-    """Compatibility endpoint for initialize without the /mcp prefix."""
-    logger.info("Received request to /initialize, forwarding to /mcp/initialize")
-    return await mcp_initialize(request)
-
-
 @app.post("/mcp/events/{connection_id}")
+@app.post("/events/{connection_id}")  # Also support without the /mcp prefix
 async def mcp_events(connection_id: str, request: Request):
     """Handle MCP events for a specific connection."""
     # Check if connection exists
     if connection_id not in mcp_connections:
-        logger.warning(f"Connection not found: {connection_id}")
-        raise HTTPException(status_code=404, detail="Connection not found")
+        # Be more lenient - create the connection if it doesn't exist
+        logger.warning(f"Connection not found: {connection_id}, creating new connection")
+        mcp_connections[connection_id] = {
+            "client_name": "unknown",
+            "client_version": "unknown",
+            "created_at": asyncio.get_event_loop().time()
+        }
     
     try:
         # Parse the request body
@@ -506,14 +520,6 @@ async def mcp_events(connection_id: str, request: Request):
     except Exception as e:
         logger.error(f"Error handling MCP event: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-# Also support the events endpoint without the /mcp prefix
-@app.post("/events/{connection_id}")
-async def events_compat(connection_id: str, request: Request):
-    """Compatibility endpoint for events without the /mcp prefix."""
-    logger.info(f"Received request to /events/{connection_id}, forwarding to /mcp/events/{connection_id}")
-    return await mcp_events(connection_id, request)
 
 
 def main():
