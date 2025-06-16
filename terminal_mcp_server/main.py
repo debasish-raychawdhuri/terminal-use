@@ -482,6 +482,48 @@ async def mcp_events(connection_id: str, request: Request):
     try:
         # Parse the request body
         body = await request.json()
+        logger.info(f"Received MCP event for connection {connection_id}: {body}")
+        
+        # Check if this is a JSON-RPC style request (Windsurf style)
+        if "id" in body and "method" in body:
+            # Handle JSON-RPC style request
+            request_id = body.get("id")
+            method = body.get("method")
+            params = body.get("params", {})
+            
+            logger.info(f"Received JSON-RPC request: id={request_id}, method={method}")
+            logger.debug(f"Params: {params}")
+            
+            # Handle initialize method
+            if method == "initialize":
+                client_capabilities = params.get("clientCapabilities", {})
+                logger.info(f"Client capabilities: {client_capabilities}")
+                
+                # Return server info and capabilities
+                return {
+                    "id": request_id,
+                    "result": {
+                        "serverInfo": {
+                            "name": "terminal-mcp-server",
+                            "version": "0.1.0"
+                        },
+                        "capabilities": {
+                            "commands": ["run_command", "send_input", "get_session", "terminate_session", "list_sessions"],
+                            "supportedSchemaVersion": "v1"
+                        }
+                    }
+                }
+            else:
+                logger.warning(f"Unknown JSON-RPC method: {method}")
+                return {
+                    "id": request_id,
+                    "error": {
+                        "code": -32601,
+                        "message": f"Method not found: {method}"
+                    }
+                }
+        
+        # Handle standard MCP event format
         event_type = body.get("type")
         payload = body.get("payload", {})
         
