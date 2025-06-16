@@ -235,7 +235,8 @@ class TerminalManager:
                 terminal_emulator = detect_terminal_emulator()
             
             logger.info(f"Using terminal emulator: {terminal_emulator}")
-            session = TerminalEmulatorSession(command, timeout, emulator=terminal_emulator)
+            session = TerminalEmulatorSession(command, timeout, emulator=terminal_emulator, 
+                                             dimensions=(40, 100))  # Set to 40 rows, 100 columns
         else:
             # Use regular terminal session
             session = TerminalSession(command, timeout)

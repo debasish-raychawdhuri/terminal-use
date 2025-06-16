@@ -24,7 +24,7 @@ class TerminalEmulatorSession:
         command: str, 
         timeout: int = 30,
         term_type: str = "xterm-256color",
-        dimensions: Tuple[int, int] = (24, 80),
+        dimensions: Tuple[int, int] = (40, 100),  # Changed to 40 rows, 100 columns
         emulator: str = "xterm"
     ):
         """Initialize a terminal emulator session.
