@@ -173,8 +173,8 @@ async def mcp_manifest():
                         "terminal_emulator": {
                             "type": "string",
                             "description": "Terminal emulator to use (xterm, gnome-terminal, konsole, tmux)",
-                            "enum": ["xterm", "gnome-terminal", "konsole", "tmux", null],
-                            "default": null
+                            "enum": ["xterm", "gnome-terminal", "konsole", "tmux", None],
+                            "default": None
                         }
                     },
                     "required": ["command"]
@@ -253,7 +253,7 @@ async def mcp_manifest():
                         "raw_output": {
                             "type": "boolean",
                             "description": "Whether to return raw output with ANSI escape sequences",
-                            "default": null
+                            "default": None
                         }
                     },
                     "required": ["session_id"]
