@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=61.0.0", "wheel", "pip>=21.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -23,6 +23,7 @@ dependencies = [
     "pydantic>=2.0.0",
     "pexpect>=4.8.0",
     "python-dotenv>=1.0.0",
+    "requests>=2.28.0",
 ]
 
 [project.optional-dependencies]
@@ -35,3 +36,9 @@ dev = [
 
 [project.scripts]
 terminal-mcp-server = "terminal_mcp_server.main:main"
+
+[tool.setuptools]
+packages = ["terminal_mcp_server"]
+
+[tool.setuptools.package-data]
+terminal_mcp_server = ["py.typed"]

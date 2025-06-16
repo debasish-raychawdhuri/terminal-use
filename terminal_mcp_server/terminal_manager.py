@@ -34,7 +34,7 @@ class TerminalSession:
     """Class representing a terminal session."""
 
     def __init__(self, command: str, timeout: int = 30, term_type: str = "xterm-256color", 
-                 dimensions: Tuple[int, int] = (24, 80), preserve_ansi: bool = True):
+                 dimensions: Tuple[int, int] = (36, 120), preserve_ansi: bool = True):
         """Initialize a terminal session.
         
         Args:
