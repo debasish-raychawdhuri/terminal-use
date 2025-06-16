@@ -68,9 +68,43 @@ class TerminalSession:
                 env=env
             )
             logger.info(f"Started process with command: {command}")
+            
+            # Try to get initial output immediately
+            self._read_output()
+            
         except Exception as e:
             logger.error(f"Failed to start process: {e}")
             raise
+    
+    def _read_output(self) -> str:
+        """Read available output from the process without blocking.
+        
+        Returns:
+            New raw output that was read
+        """
+        if not self.is_running():
+            return ""
+            
+        try:
+            # Try to read any new output without blocking
+            self.process.expect("__UNLIKELY_PATTERN__", timeout=0.1)
+        except pexpect.TIMEOUT:
+            # This is expected, we just want to capture output
+            pass
+        except pexpect.EOF:
+            # Process ended
+            self.exit_code = self.process.exitstatus
+        
+        # Get the output since last read
+        new_raw_output = self.process.before or ""
+        self.raw_output_buffer += new_raw_output
+        
+        # Process the output based on preference
+        if not self.preserve_ansi:
+            new_output = strip_ansi_escape_sequences(new_raw_output)
+            self.output_buffer += new_output
+            
+        return new_raw_output
     
     def send_input(self, input_text: str) -> str:
         """Send input to the terminal.
@@ -122,33 +156,15 @@ class TerminalSession:
         Returns:
             The current output
         """
-        if not self.is_running():
-            return self.raw_output_buffer if (raw or self.preserve_ansi) else self.output_buffer
+        # Read any new output
+        self._read_output()
         
-        try:
-            # Try to read any new output without blocking
-            self.process.expect("__UNLIKELY_PATTERN__", timeout=0.1)
-        except pexpect.TIMEOUT:
-            # This is expected, we just want to capture output
-            pass
-        except pexpect.EOF:
-            # Process ended
-            self.exit_code = self.process.exitstatus
-        
-        # Get the output since last read
-        new_raw_output = self.process.before
-        self.raw_output_buffer += new_raw_output
-        
-        # Process the output based on preference
+        # Determine whether to return raw output
         if raw is None:
             use_raw = self.preserve_ansi
         else:
             use_raw = raw
             
-        if not use_raw:
-            new_output = strip_ansi_escape_sequences(new_raw_output)
-            self.output_buffer += new_output
-        
         return self.raw_output_buffer if use_raw else self.output_buffer
     
     def is_running(self) -> bool:
@@ -185,7 +201,7 @@ class TerminalSession:
                 pass
         
         # Capture any final output
-        self.get_output()
+        self._read_output()
         
         # Set exit code if not already set
         if self.exit_code is None and self.process.exitstatus is not None:
@@ -243,10 +259,24 @@ class TerminalManager:
         
         self.sessions[session_id] = session
         
-        # Wait a bit for initial output
-        time.sleep(0.5)
+        # For simple commands, wait for completion or a reasonable timeout
+        # This ensures we capture the output before returning
+        is_simple_command = not use_terminal_emulator
+        wait_time = 0
+        max_wait = 2  # Maximum seconds to wait for simple commands
         
-        # Get initial output
+        while is_simple_command and session.is_running() and wait_time < max_wait:
+            time.sleep(0.1)
+            wait_time += 0.1
+            
+            # Check if we have output already
+            output = session.get_output()
+            if output and len(output) > 0:
+                # If we have output and it's been at least 0.5 seconds, we can return
+                if wait_time >= 0.5:
+                    break
+        
+        # Get final output
         output = session.get_output()
         exit_code = getattr(session, 'exit_code', None)
         running = session.is_running()

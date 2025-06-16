@@ -199,10 +199,189 @@ async def health_check():
 mcp_connections = {}
 
 
+def get_tools_definition():
+    """Get the tools definition for MCP protocol."""
+    return [
+        {
+            "name": "run_command",
+            "description": "Run a command in a terminal",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "The command to run"
+                    },
+                    "timeout": {
+                        "type": "integer",
+                        "description": "Timeout in seconds",
+                        "default": 30
+                    },
+                    "session_id": {
+                        "type": "string",
+                        "description": "Optional session ID for the terminal session"
+                    },
+                    "use_terminal_emulator": {
+                        "type": "boolean",
+                        "description": "Whether to use a terminal emulator for TUI applications",
+                        "default": True
+                    },
+                    "terminal_emulator": {
+                        "type": "string",
+                        "description": "Terminal emulator to use (xterm, gnome-terminal, konsole, tmux)",
+                        "enum": ["xterm", "gnome-terminal", "konsole", "tmux", None],
+                        "default": None
+                    }
+                },
+                "required": ["command"]
+            },
+            "output_schema": {
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "The session ID for the terminal session"
+                    },
+                    "output": {
+                        "type": "string",
+                        "description": "The output from the terminal"
+                    },
+                    "exit_code": {
+                        "type": "integer",
+                        "description": "The exit code of the command, if completed"
+                    },
+                    "running": {
+                        "type": "boolean",
+                        "description": "Whether the command is still running"
+                    }
+                }
+            }
+        },
+        {
+            "name": "send_input",
+            "description": "Send input to a running terminal session",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "The session ID for the terminal session"
+                    },
+                    "input": {
+                        "type": "string",
+                        "description": "The input to send to the terminal"
+                    }
+                },
+                "required": ["session_id", "input"]
+            },
+            "output_schema": {
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "The session ID for the terminal session"
+                    },
+                    "output": {
+                        "type": "string",
+                        "description": "The output from the terminal after sending input"
+                    },
+                    "exit_code": {
+                        "type": "integer",
+                        "description": "The exit code of the command, if completed"
+                    },
+                    "running": {
+                        "type": "boolean",
+                        "description": "Whether the command is still running"
+                    }
+                }
+            }
+        },
+        {
+            "name": "get_session",
+            "description": "Get the current state of a terminal session",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "The session ID for the terminal session"
+                    },
+                    "raw_output": {
+                        "type": "boolean",
+                        "description": "Whether to return raw output with ANSI escape sequences",
+                        "default": None
+                    }
+                },
+                "required": ["session_id"]
+            },
+            "output_schema": {
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "The session ID for the terminal session"
+                    },
+                    "output": {
+                        "type": "string",
+                        "description": "The current output from the terminal"
+                    },
+                    "exit_code": {
+                        "type": "integer",
+                        "description": "The exit code of the command, if completed"
+                    },
+                    "running": {
+                        "type": "boolean",
+                        "description": "Whether the command is still running"
+                    }
+                }
+            }
+        },
+        {
+            "name": "terminate_session",
+            "description": "Terminate a terminal session",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "The session ID for the terminal session to terminate"
+                    }
+                },
+                "required": ["session_id"]
+            },
+            "output_schema": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string",
+                        "description": "Confirmation message"
+                    }
+                }
+            }
+        },
+        {
+            "name": "list_sessions",
+            "description": "List all active terminal sessions",
+            "input_schema": {
+                "type": "object",
+                "properties": {}
+            },
+            "output_schema": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                },
+                "description": "List of active session IDs"
+            }
+        }
+    ]
+
+
 # MCP Protocol Implementation
 @app.get("/mcp/manifest")
+@app.get("/manifest")  # Also support without the /mcp prefix
 async def mcp_manifest():
-    """Return the MCP manifest for this server as a Server-Sent Event."""
+    """Return the MCP manifest for this server as a regular JSON response."""
     logger.info("Received request for MCP manifest")
     
     manifest = {
@@ -210,188 +389,20 @@ async def mcp_manifest():
         "name": "terminal-use",
         "display_name": "Terminal Use",
         "description": "Allows AI agents to interact with terminal-based applications",
-        "tools": [
-            {
-                "name": "run_command",
-                "description": "Run a command in a terminal",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "command": {
-                            "type": "string",
-                            "description": "The command to run"
-                        },
-                        "timeout": {
-                            "type": "integer",
-                            "description": "Timeout in seconds",
-                            "default": 30
-                        },
-                        "session_id": {
-                            "type": "string",
-                            "description": "Optional session ID for the terminal session"
-                        },
-                        "use_terminal_emulator": {
-                            "type": "boolean",
-                            "description": "Whether to use a terminal emulator for TUI applications",
-                            "default": True
-                        },
-                        "terminal_emulator": {
-                            "type": "string",
-                            "description": "Terminal emulator to use (xterm, gnome-terminal, konsole, tmux)",
-                            "enum": ["xterm", "gnome-terminal", "konsole", "tmux", None],
-                            "default": None
-                        }
-                    },
-                    "required": ["command"]
-                },
-                "output_schema": {
-                    "type": "object",
-                    "properties": {
-                        "session_id": {
-                            "type": "string",
-                            "description": "The session ID for the terminal session"
-                        },
-                        "output": {
-                            "type": "string",
-                            "description": "The output from the terminal"
-                        },
-                        "exit_code": {
-                            "type": "integer",
-                            "description": "The exit code of the command, if completed"
-                        },
-                        "running": {
-                            "type": "boolean",
-                            "description": "Whether the command is still running"
-                        }
-                    }
-                }
-            },
-            {
-                "name": "send_input",
-                "description": "Send input to a running terminal session",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "session_id": {
-                            "type": "string",
-                            "description": "The session ID for the terminal session"
-                        },
-                        "input": {
-                            "type": "string",
-                            "description": "The input to send to the terminal"
-                        }
-                    },
-                    "required": ["session_id", "input"]
-                },
-                "output_schema": {
-                    "type": "object",
-                    "properties": {
-                        "session_id": {
-                            "type": "string",
-                            "description": "The session ID for the terminal session"
-                        },
-                        "output": {
-                            "type": "string",
-                            "description": "The output from the terminal after sending input"
-                        },
-                        "exit_code": {
-                            "type": "integer",
-                            "description": "The exit code of the command, if completed"
-                        },
-                        "running": {
-                            "type": "boolean",
-                            "description": "Whether the command is still running"
-                        }
-                    }
-                }
-            },
-            {
-                "name": "get_session",
-                "description": "Get the current state of a terminal session",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "session_id": {
-                            "type": "string",
-                            "description": "The session ID for the terminal session"
-                        },
-                        "raw_output": {
-                            "type": "boolean",
-                            "description": "Whether to return raw output with ANSI escape sequences",
-                            "default": None
-                        }
-                    },
-                    "required": ["session_id"]
-                },
-                "output_schema": {
-                    "type": "object",
-                    "properties": {
-                        "session_id": {
-                            "type": "string",
-                            "description": "The session ID for the terminal session"
-                        },
-                        "output": {
-                            "type": "string",
-                            "description": "The current output from the terminal"
-                        },
-                        "exit_code": {
-                            "type": "integer",
-                            "description": "The exit code of the command, if completed"
-                        },
-                        "running": {
-                            "type": "boolean",
-                            "description": "Whether the command is still running"
-                        }
-                    }
-                }
-            },
-            {
-                "name": "terminate_session",
-                "description": "Terminate a terminal session",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "session_id": {
-                            "type": "string",
-                            "description": "The session ID for the terminal session to terminate"
-                        }
-                    },
-                    "required": ["session_id"]
-                },
-                "output_schema": {
-                    "type": "object",
-                    "properties": {
-                        "message": {
-                            "type": "string",
-                            "description": "Confirmation message"
-                        }
-                    }
-                }
-            },
-            {
-                "name": "list_sessions",
-                "description": "List all active terminal sessions",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {}
-                },
-                "output_schema": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "description": "List of active session IDs"
-                }
-            }
-        ]
+        "tools": get_tools_definition()
     }
     
+    # Return as regular JSON, not a stream
+    return JSONResponse(content=manifest)
+
+
+@app.get("/mcp/events")
+@app.get("/events")  # Also support without the /mcp prefix
+async def mcp_events_stream():
+    """Return an SSE stream for MCP events (kept for compatibility but not used by Q Developer)."""
+    logger.info("Received request for MCP events stream")
+    
     async def generate():
-        # Send the manifest as a data event (no event type)
-        manifest_json = json.dumps(manifest)
-        logger.debug(f"Sending manifest data: {manifest_json[:100]}...")
-        yield f"data: {manifest_json}\n\n"
-        
         # Send ready event
         logger.debug("Sending ready event")
         yield "event: ready\ndata: {}\n\n"
@@ -417,176 +428,160 @@ async def mcp_manifest():
     )
 
 
-@app.post("/mcp/initialize")
-async def mcp_initialize(request: Request):
-    """Initialize the MCP connection."""
+@app.post("/mcp/command")
+@app.post("/command")  # Also support without the /mcp prefix
+async def mcp_command(request: Request):
+    """Handle MCP commands using JSON-RPC 2.0."""
     try:
         body = await request.json()
-        logger.info(f"MCP initialize request body: {body}")
+        logger.info(f"Received MCP command: {body}")
         
-        client_name = body.get("client_name", "unknown")
-        client_version = body.get("client_version", "unknown")
+        method = body.get("method")
+        req_id = body.get("id")
+        params = body.get("params", {})
         
-        logger.info(f"MCP initialize request from {client_name} {client_version}")
+        if not method:
+            logger.warning("No method specified in request")
+            return JSONResponse(content={
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "error": {
+                    "code": -32600,
+                    "message": "Invalid Request: method not specified"
+                }
+            })
         
-        # Generate a connection ID
-        connection_id = str(uuid.uuid4())
+        logger.info(f"Processing JSON-RPC method: {method} with id: {req_id}")
         
-        # Store connection info
-        mcp_connections[connection_id] = {
-            "client_name": client_name,
-            "client_version": client_version,
-            "created_at": asyncio.get_event_loop().time()
-        }
-        
-        # Return success response
-        response = {
-            "connection_id": connection_id,
-            "server_info": {
-                "name": "terminal-mcp-server",
-                "version": "0.1.0"
-            }
-        }
-        logger.info(f"MCP initialize response: {response}")
-        
-        return JSONResponse(
-            content=response,
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-            }
-        )
-    except Exception as e:
-        logger.error(f"Error in MCP initialize: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/mcp/events/{connection_id}")
-async def mcp_events(connection_id: str, request: Request):
-    """Handle MCP events for a specific connection."""
-    try:
-        body = await request.json()
-        logger.info(f"Received MCP event for connection {connection_id}: {body}")
-        
-        # Check if this is a JSON-RPC style request
-        if "id" in body and "method" in body:
-            request_id = body.get("id")
-            method = body.get("method")
-            params = body.get("params", {})
-            
-            logger.info(f"Received JSON-RPC request: id={request_id}, method={method}")
-            
-            # Handle initialize method
-            if method == "initialize":
-                client_capabilities = params.get("clientCapabilities", {})
-                logger.info(f"Client capabilities: {client_capabilities}")
-                
-                # Return server info and capabilities
-                return {
-                    "id": request_id,
-                    "result": {
-                        "serverInfo": {
-                            "name": "terminal-mcp-server",
-                            "version": "0.1.0"
-                        },
-                        "capabilities": {
-                            "commands": ["run_command", "send_input", "get_session", "terminate_session", "list_sessions"],
-                            "supportedSchemaVersion": "v1"
-                        }
+        # Handle initialize method
+        if method == "initialize":
+            return JSONResponse(content={
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {
+                    "serverInfo": {
+                        "name": "terminal-use",
+                        "version": "0.1.0"
+                    },
+                    "capabilities": {
+                        "tools": get_tools_definition()
                     }
                 }
-            # Handle invoke method
-            elif method == "invoke":
-                command = params.get("command")
-                command_params = params.get("params", {})
-                
-                logger.info(f"Invoking command: {command} with params: {command_params}")
-                
-                # Handle different commands
-                if command == "run_command":
-                    result = await run_command(RunCommandRequest(**command_params))
-                    return {
-                        "id": request_id,
-                        "result": result.dict()
-                    }
-                elif command == "send_input":
-                    result = await send_input(SendInputRequest(**command_params))
-                    return {
-                        "id": request_id,
-                        "result": result.dict()
-                    }
-                elif command == "get_session":
-                    result = await get_session(command_params["session_id"], command_params.get("raw_output"))
-                    return {
-                        "id": request_id,
-                        "result": result.dict()
-                    }
-                elif command == "terminate_session":
-                    result = await terminate_session(command_params["session_id"])
-                    return {
-                        "id": request_id,
-                        "result": result
-                    }
-                elif command == "list_sessions":
-                    result = await list_sessions()
-                    return {
-                        "id": request_id,
-                        "result": result
-                    }
-                else:
-                    logger.warning(f"Unknown command: {command}")
-                    return {
-                        "id": request_id,
-                        "error": {
-                            "code": -32601,
-                            "message": f"Command not found: {command}"
-                        }
-                    }
-            else:
-                logger.warning(f"Unknown method: {method}")
-                return {
-                    "id": request_id,
+            })
+        # Handle direct command methods
+        elif method == "run_command":
+            try:
+                result = await run_command(RunCommandRequest(**params))
+                return JSONResponse(content={
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "result": result.dict()
+                })
+            except Exception as e:
+                logger.error(f"Error executing run_command: {e}")
+                return JSONResponse(content={
+                    "jsonrpc": "2.0",
+                    "id": req_id,
                     "error": {
-                        "code": -32601,
-                        "message": f"Method not found: {method}"
+                        "code": -32000,
+                        "message": f"Server error: {str(e)}"
                     }
-                }
-        
-        # Handle standard MCP event format
-        event_type = body.get("type")
-        payload = body.get("payload", {})
-        
-        if event_type == "invoke_tool":
-            tool_name = payload.get("name")
-            tool_params = payload.get("parameters", {})
-            
-            logger.info(f"Invoking tool: {tool_name} with params: {tool_params}")
-            
-            # Handle tool invocation
-            if tool_name == "run_command":
-                result = await run_command(RunCommandRequest(**tool_params))
-                return {"result": result.dict()}
-            elif tool_name == "send_input":
-                result = await send_input(SendInputRequest(**tool_params))
-                return {"result": result.dict()}
-            elif tool_name == "get_session":
-                result = await get_session(tool_params["session_id"], tool_params.get("raw_output"))
-                return {"result": result.dict()}
-            elif tool_name == "terminate_session":
-                result = await terminate_session(tool_params["session_id"])
-                return {"result": result}
-            elif tool_name == "list_sessions":
+                })
+        elif method == "send_input":
+            try:
+                result = await send_input(SendInputRequest(**params))
+                return JSONResponse(content={
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "result": result.dict()
+                })
+            except Exception as e:
+                logger.error(f"Error executing send_input: {e}")
+                return JSONResponse(content={
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "error": {
+                        "code": -32000,
+                        "message": f"Server error: {str(e)}"
+                    }
+                })
+        elif method == "get_session":
+            try:
+                result = await get_session(params["session_id"], params.get("raw_output"))
+                return JSONResponse(content={
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "result": result.dict()
+                })
+            except Exception as e:
+                logger.error(f"Error executing get_session: {e}")
+                return JSONResponse(content={
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "error": {
+                        "code": -32000,
+                        "message": f"Server error: {str(e)}"
+                    }
+                })
+        elif method == "terminate_session":
+            try:
+                result = await terminate_session(params["session_id"])
+                return JSONResponse(content={
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "result": result
+                })
+            except Exception as e:
+                logger.error(f"Error executing terminate_session: {e}")
+                return JSONResponse(content={
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "error": {
+                        "code": -32000,
+                        "message": f"Server error: {str(e)}"
+                    }
+                })
+        elif method == "list_sessions":
+            try:
                 result = await list_sessions()
-                return {"result": result}
-            else:
-                logger.warning(f"Unknown tool: {tool_name}")
-                raise HTTPException(status_code=400, detail=f"Unknown tool: {tool_name}")
+                return JSONResponse(content={
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "result": result
+                })
+            except Exception as e:
+                logger.error(f"Error executing list_sessions: {e}")
+                return JSONResponse(content={
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "error": {
+                        "code": -32000,
+                        "message": f"Server error: {str(e)}"
+                    }
+                })
         else:
-            logger.warning(f"Unknown event type: {event_type}")
-            raise HTTPException(status_code=400, detail=f"Unknown event type: {event_type}")
+            logger.warning(f"Unknown method: {method}")
+            return JSONResponse(content={
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "error": {
+                    "code": -32601,
+                    "message": f"Method '{method}' not found"
+                }
+            })
     except Exception as e:
-        logger.error(f"Error handling MCP event: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error handling MCP command: {e}")
+        return JSONResponse(
+            content={
+                "jsonrpc": "2.0",
+                "id": None,  # We don't know the ID if parsing failed
+                "error": {
+                    "code": -32700,
+                    "message": f"Parse error: {str(e)}"
+                }
+            },
+            status_code=500
+        )
 
 
 def main():
@@ -601,6 +596,24 @@ def main():
     # Set log level
     log_level = getattr(logging, args.log_level.upper(), logging.INFO)
     logging.getLogger().setLevel(log_level)
+    
+    # Print MCP metadata to stdout for Q Developer to discover the server
+    # Use the actual paths from our implementation
+    mcp_metadata = {
+        "port": args.port,
+        "protocol": "http",
+        "path": "/",
+        "manifestPath": "/mcp/manifest",
+        "commandPath": "/mcp/command",
+        "eventsPath": "/mcp/events"
+    }
+    
+    # Print directly to stdout and flush to ensure immediate output
+    # Use the exact format required by Q Developer
+    sys.stdout.write("--- MCP SERVER METADATA ---\n")
+    sys.stdout.write(json.dumps(mcp_metadata) + "\n")
+    sys.stdout.write("--- END MCP SERVER METADATA ---\n")
+    sys.stdout.flush()
     
     logger.info(f"Starting Terminal MCP Server on {args.host}:{args.port}")
     
