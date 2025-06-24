@@ -1,0 +1,4 @@
+#!/bin/bash
+# MCP Terminal Server wrapper script with full TUI support
+cd /home/debasish/work/talentica/terminal-mcp-server
+exec python3 -m terminal_mcp_server.mcp_stdio_server "$@"

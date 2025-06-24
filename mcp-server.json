@@ -1,0 +1,7 @@
+{
+  "name": "terminal",
+  "description": "Allows AI agents to interact with terminal-based applications",
+  "command": "./start_server.sh",
+  "args": [],
+  "env": {}
+}

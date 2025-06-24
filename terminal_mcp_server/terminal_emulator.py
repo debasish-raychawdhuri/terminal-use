@@ -11,6 +11,7 @@ import subprocess
 import tempfile
 import threading
 import time
+import re
 from typing import Dict, List, Optional, Tuple, Union
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,7 @@ class TerminalEmulatorSession:
         self.exit_code = None
         self.start_time = time.time()
         self.window_id = None
+        self.raw_output_buffer = ""  # Store raw terminal output including escape sequences
         
         # Create a socket pair for communication
         self.socket_dir = tempfile.mkdtemp()
@@ -250,13 +252,109 @@ echo -e "\\n__EXIT_CODE__${{exit_code}}__" | nc -U {self.socket_path}
             logger.error(f"Error sending input: {e}")
             return self.output_buffer
     
-    def get_output(self) -> str:
+    def get_output(self, raw: bool = None) -> str:
         """Get the current output from the terminal.
         
+        Args:
+            raw: Ignored, for compatibility with TerminalSession
         Returns:
             The current output
         """
         return self.output_buffer
+    
+    def capture_screen(self) -> str:
+        """Capture the current screen content of the terminal.
+        
+        Returns:
+            The current screen content as text
+        """
+        if not self.is_running():
+            return "Terminal is not running"
+        
+        try:
+            if self.emulator == "tmux":
+                # Use tmux's built-in screen capture
+                session_name = f"terminal_mcp_{os.path.basename(self.socket_path)}"
+                result = subprocess.run(
+                    ["tmux", "capture-pane", "-t", session_name, "-p"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                
+                if result.returncode == 0:
+                    return result.stdout
+                else:
+                    return f"Error capturing tmux screen: {result.stderr}"
+            
+            elif self.emulator in ["xterm", "gnome-terminal", "konsole"]:
+                # For X11 terminals, try to capture using alternative methods
+                try:
+                    # Method 1: Try to use xdotool to get window text (limited support)
+                    if not self.window_id:
+                        self._get_window_id()
+                    
+                    if self.window_id:
+                        # Try to get window title and basic info
+                        result = subprocess.run(
+                            ["xdotool", "getwindowname", self.window_id],
+                            capture_output=True,
+                            text=True,
+                            timeout=5
+                        )
+                        
+                        window_info = f"Window: {result.stdout.strip()}" if result.returncode == 0 else "Window info unavailable"
+                    else:
+                        window_info = "Window ID not found"
+                    
+                    # Method 2: Use the socket output buffer (limited to what was captured)
+                    if self.output_buffer:
+                        # Try to extract readable content from output buffer
+                        readable_content = self._extract_readable_content(self.output_buffer)
+                        return f"{window_info}\n\nCaptured Output:\n{readable_content}\n\n[Note: For full screen capture, consider using tmux emulator]"
+                    else:
+                        return f"{window_info}\n\nNo output captured yet. Screen capture for GUI terminals is limited.\nFor better screen capture, consider using tmux emulator."
+                        
+                except Exception as e:
+                    return f"Error capturing screen: {str(e)}\n[Note: Screen capture for GUI terminals is limited. Consider using tmux.]"
+            
+            else:
+                return "Screen capture not supported for this terminal emulator"
+                
+        except Exception as e:
+            logger.error(f"Error capturing screen: {e}")
+            return f"Error capturing screen: {str(e)}"
+    
+    def _extract_readable_content(self, raw_output: str) -> str:
+        """Extract readable content from raw terminal output."""
+        if not raw_output:
+            return "No content available"
+        
+        # Remove common ANSI escape sequences
+        # Remove escape sequences for colors, cursor movement, etc.
+        clean_text = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', raw_output)
+        clean_text = re.sub(r'\x1b\].*?\x07', '', clean_text)  # Remove title sequences
+        clean_text = re.sub(r'\x1b[PX^_].*?\x1b\\', '', clean_text)  # Remove other escape sequences
+        clean_text = re.sub(r'\x1b[NO]', '', clean_text)  # Remove single-character escapes
+        
+        # Remove control characters except newlines and tabs
+        clean_text = ''.join(char for char in clean_text if char.isprintable() or char in '\n\t')
+        
+        # Clean up excessive whitespace but preserve structure
+        lines = clean_text.split('\n')
+        cleaned_lines = []
+        for line in lines:
+            # Remove trailing whitespace but keep leading whitespace for indentation
+            cleaned_line = line.rstrip()
+            if cleaned_line or (cleaned_lines and cleaned_lines[-1]):  # Keep empty lines between content
+                cleaned_lines.append(cleaned_line)
+        
+        # Join lines and limit length
+        result = '\n'.join(cleaned_lines)
+        if len(result) > 2000:  # Limit output length
+            result = result[:2000] + "\n... (truncated)"
+        
+        return result if result.strip() else "No readable content found"
     
     def is_running(self) -> bool:
         """Check if the process is still running.

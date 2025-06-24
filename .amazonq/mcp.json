@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "terminal": {
+      "command": "/home/debasish/work/talentica/terminal-mcp-server/mcp_server_standalone.py",
+      "args": [],
+      "env": {},
+      "timeout": 120000
+    }
+  }
+}
