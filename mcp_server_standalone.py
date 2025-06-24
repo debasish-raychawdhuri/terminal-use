@@ -187,6 +187,29 @@ class PersistentTerminalManager:
         
         return result
     
+    def _clean_terminal_output(self, raw_output: str) -> str:
+        """Clean terminal output for better readability in Amazon Q."""
+        if not raw_output:
+            return "No output available"
+        
+        import re
+        
+        # Light cleaning - just remove the worst escape sequences but keep output
+        clean = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', raw_output)
+        clean = re.sub(r'\x1b\]697;[^\x07]*\x07', '', clean)
+        clean = re.sub(r'\x1b\]0;[^\x07]*\x07', '', clean)
+        
+        # Keep printable chars, newlines, tabs
+        clean = ''.join(char for char in clean if char.isprintable() or char in '\n\t\r')
+        
+        # Show last 50 lines to include command output
+        lines = clean.split('\n')
+        if len(lines) > 50:
+            lines = lines[-50:]
+        
+        result = '\n'.join(lines).strip()
+        return result if result else "Terminal ready"
+    
     def get_terminal_output(self, session_id: str) -> Tuple[str, Optional[int], bool]:
         """Get output from a terminal emulator session."""
         if session_id not in self.emulator_sessions:
@@ -265,6 +288,20 @@ def get_tools():
                     }
                 },
                 "required": ["command"]
+            }
+        },
+        {
+            "name": "start_shell",
+            "description": "Start an interactive shell terminal",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "timeout": {
+                        "type": "integer",
+                        "description": "Timeout in seconds (default: 30)",
+                        "default": 30
+                    }
+                }
             }
         },
         {
@@ -414,10 +451,13 @@ def handle_request(request: Dict) -> Dict:
                         ]
                     }
                 }
-            elif tool_name == "send_input":
-                output, exit_code, running = terminal_manager.send_input_to_terminal(
-                    arguments["session_id"],
-                    arguments["input"]
+            elif tool_name == "start_shell":
+                session_id = terminal_manager.generate_session_id()
+                timeout = arguments.get("timeout", 30)
+                output, exit_code, running = terminal_manager.start_terminal_emulator(
+                    "bash",  # Start interactive bash shell
+                    session_id,
+                    timeout
                 )
                 
                 response = {
@@ -427,7 +467,28 @@ def handle_request(request: Dict) -> Dict:
                         "content": [
                             {
                                 "type": "text",
-                                "text": f"Input sent. Running: {running}\nOutput:\n{output}"
+                                "text": output
+                            }
+                        ]
+                    }
+                }
+            elif tool_name == "send_input":
+                output, exit_code, running = terminal_manager.send_input_to_terminal(
+                    arguments["session_id"],
+                    arguments["input"]
+                )
+                
+                # Clean up the output for better readability
+                cleaned_output = terminal_manager._clean_terminal_output(output)
+                
+                response = {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": f"Input sent. Running: {running}\n\nTerminal Output:\n{cleaned_output}"
                             }
                         ]
                     }

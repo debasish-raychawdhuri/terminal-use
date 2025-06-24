@@ -12,6 +12,8 @@ import tempfile
 import threading
 import time
 import re
+import termios
+import fcntl
 from typing import Dict, List, Optional, Tuple, Union
 
 logger = logging.getLogger(__name__)
@@ -47,85 +49,67 @@ class TerminalEmulatorSession:
         self.output_buffer = ""
         self.exit_code = None
         self.start_time = time.time()
-        self.window_id = None
-        self.raw_output_buffer = ""  # Store raw terminal output including escape sequences
         
-        # Create a socket pair for communication
-        self.socket_dir = tempfile.mkdtemp()
-        self.socket_path = os.path.join(self.socket_dir, "terminal.sock")
-        self.server_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.server_socket.bind(self.socket_path)
-        self.server_socket.listen(1)
-        
-        # Create a script to run in the terminal
-        self.script_path = os.path.join(self.socket_dir, "run_command.sh")
-        with open(self.script_path, "w") as f:
-            f.write(f"""#!/bin/bash
-export TERM={self.term_type}
-# Run the command and capture its output
-{command} 2>&1 | tee >(nc -U {self.socket_path})
-exit_code=${{PIPESTATUS[0]}}
-# Send exit code
-echo -e "\\n__EXIT_CODE__${{exit_code}}__" | nc -U {self.socket_path}
-""")
-        os.chmod(self.script_path, 0o755)
-        
-        # Start the terminal emulator
-        self._start_terminal_emulator()
-        
-        # Start a thread to read from the socket
+        # Use PTY for reliable terminal interaction
+        self.master_fd = None
+        self.slave_fd = None
         self.running = True
-        self.reader_thread = threading.Thread(target=self._read_from_socket)
+        
+        # Start the process with PTY
+        self._start_pty_process()
+        
+        # Start thread to read output
+        self.reader_thread = threading.Thread(target=self._read_pty_output)
         self.reader_thread.daemon = True
         self.reader_thread.start()
         
-        # Wait a moment for the terminal to initialize
-        time.sleep(1)
-        
-        # Get the window ID
-        self._get_window_id()
+        # Wait for process to start
+        time.sleep(0.5)
     
-    def _start_terminal_emulator(self):
-        """Start the terminal emulator."""
+    def _start_pty_process(self):
+        """Start process with PTY for direct terminal interaction."""
         try:
-            if self.emulator == "xterm":
-                cmd = [
-                    "xterm",
-                    "-T", f"Terminal MCP: {self.command}",
-                    "-geometry", f"{self.dimensions[1]}x{self.dimensions[0]}",
-                    "-e", self.script_path
-                ]
-            elif self.emulator == "gnome-terminal":
-                cmd = [
-                    "gnome-terminal",
-                    "--title", f"Terminal MCP: {self.command}",
-                    "--geometry", f"{self.dimensions[1]}x{self.dimensions[0]}",
-                    "--", self.script_path
-                ]
-            elif self.emulator == "konsole":
-                cmd = [
-                    "konsole",
-                    "--title", f"Terminal MCP: {self.command}",
-                    "--geometry", f"{self.dimensions[1]}x{self.dimensions[0]}",
-                    "-e", self.script_path
-                ]
-            elif self.emulator == "tmux":
-                # Create a new detached tmux session
-                session_name = f"terminal_mcp_{os.path.basename(self.socket_path)}"
-                cmd = [
-                    "tmux", "new-session", 
-                    "-d", "-s", session_name,
-                    self.script_path
-                ]
-            else:
-                raise ValueError(f"Unsupported terminal emulator: {self.emulator}")
+            # Create PTY
+            self.master_fd, self.slave_fd = pty.openpty()
             
-            logger.info(f"Starting terminal emulator with command: {' '.join(cmd)}")
-            self.process = subprocess.Popen(cmd)
+            # Set terminal size
+            import struct
+            winsize = struct.pack('HHHH', self.dimensions[0], self.dimensions[1], 0, 0)
+            fcntl.ioctl(self.slave_fd, termios.TIOCSWINSZ, winsize)
+            
+            # Start process
+            if self.command.strip() in ['bash', 'sh', 'shell']:
+                # Interactive shell
+                self.process = subprocess.Popen(
+                    ['bash', '-i'],
+                    stdin=self.slave_fd,
+                    stdout=self.slave_fd,
+                    stderr=self.slave_fd,
+                    preexec_fn=os.setsid,
+                    env=dict(os.environ, TERM=self.term_type, PS1='$ ')
+                )
+            else:
+                # Single command, then shell
+                self.process = subprocess.Popen(
+                    ['bash', '-c', f'{self.command}; exec bash -i'],
+                    stdin=self.slave_fd,
+                    stdout=self.slave_fd,
+                    stderr=self.slave_fd,
+                    preexec_fn=os.setsid,
+                    env=dict(os.environ, TERM=self.term_type, PS1='$ ')
+                )
+            
+            # Close slave in parent
+            os.close(self.slave_fd)
+            
+            logger.info(f"Started PTY process for command: {self.command}")
             
         except Exception as e:
-            logger.error(f"Failed to start terminal emulator: {e}")
-            self.cleanup()
+            logger.error(f"Failed to start PTY process: {e}")
+            if self.master_fd:
+                os.close(self.master_fd)
+            if self.slave_fd:
+                os.close(self.slave_fd)
             raise
     
     def _get_window_id(self):
@@ -150,49 +134,31 @@ echo -e "\\n__EXIT_CODE__${{exit_code}}__" | nc -U {self.socket_path}
             except Exception as e:
                 logger.error(f"Error getting window ID: {e}")
     
-    def _read_from_socket(self):
-        """Read from the socket in a separate thread."""
+    def _read_pty_output(self):
+        """Read output from PTY."""
         try:
-            client_socket, _ = self.server_socket.accept()
-            client_socket.settimeout(0.5)  # Short timeout for non-blocking reads
-            
-            buffer = ""
-            while self.running:
+            while self.running and self.master_fd is not None:
                 try:
-                    data = client_socket.recv(4096).decode("utf-8", errors="replace")
-                    if not data:
-                        # Connection closed
-                        break
-                    
-                    buffer += data
-                    
-                    # Check for exit code marker
-                    if "__EXIT_CODE__" in buffer:
-                        parts = buffer.split("__EXIT_CODE__")
-                        if len(parts) > 1 and "__" in parts[1]:
-                            code_parts = parts[1].split("__")
-                            if code_parts[0].isdigit():
-                                self.exit_code = int(code_parts[0])
-                                buffer = parts[0] + code_parts[1]
-                    
-                    self.output_buffer = buffer
-                    
-                except socket.timeout:
-                    # This is expected for the non-blocking reads
-                    continue
-                except Exception as e:
-                    logger.error(f"Error reading from socket: {e}")
+                    ready, _, _ = select.select([self.master_fd], [], [], 0.1)
+                    if ready:
+                        data = os.read(self.master_fd, 4096)
+                        if data:
+                            text = data.decode('utf-8', errors='replace')
+                            self.output_buffer += text
+                            # Keep buffer reasonable size
+                            if len(self.output_buffer) > 50000:
+                                self.output_buffer = self.output_buffer[-40000:]
+                except (OSError, ValueError):
+                    # PTY closed
                     break
-            
-            client_socket.close()
-            
+                except Exception as e:
+                    logger.error(f"Error reading PTY: {e}")
+                    break
         except Exception as e:
-            logger.error(f"Error in socket communication: {e}")
-        finally:
-            self.server_socket.close()
+            logger.error(f"Error in PTY reader: {e}")
     
     def send_input(self, input_text: str) -> str:
-        """Send input to the terminal.
+        """Send input to the PTY.
         
         Args:
             input_text: The input to send
@@ -203,53 +169,14 @@ echo -e "\\n__EXIT_CODE__${{exit_code}}__" | nc -U {self.socket_path}
         if not self.is_running():
             raise RuntimeError("Process is not running")
         
-        # For terminal emulators, we need to use tools like xdotool to send keystrokes
         try:
-            if self.emulator in ["xterm", "gnome-terminal", "konsole"]:
-                if not self.window_id:
-                    self._get_window_id()
-                
-                if not self.window_id:
-                    logger.error("Cannot send input: Window ID not found")
-                    return self.output_buffer
-                
-                # Activate window
-                subprocess.run(["xdotool", "windowactivate", self.window_id])
-                time.sleep(0.2)  # Wait for window to activate
-                
-                # Handle special keys
-                if input_text == "\x1b":  # Escape key
-                    subprocess.run(["xdotool", "key", "Escape"])
-                elif input_text == "\r":  # Enter key
-                    subprocess.run(["xdotool", "key", "Return"])
-                elif input_text == "\t":  # Tab key
-                    subprocess.run(["xdotool", "key", "Tab"])
-                elif input_text == "\x7f" or input_text == "\b":  # Backspace
-                    subprocess.run(["xdotool", "key", "BackSpace"])
-                elif input_text.startswith("\x1b["):  # Arrow keys and others
-                    if input_text == "\x1b[A":  # Up arrow
-                        subprocess.run(["xdotool", "key", "Up"])
-                    elif input_text == "\x1b[B":  # Down arrow
-                        subprocess.run(["xdotool", "key", "Down"])
-                    elif input_text == "\x1b[C":  # Right arrow
-                        subprocess.run(["xdotool", "key", "Right"])
-                    elif input_text == "\x1b[D":  # Left arrow
-                        subprocess.run(["xdotool", "key", "Left"])
-                else:
-                    # For normal text, use type
-                    subprocess.run(["xdotool", "type", input_text])
-                
-            elif self.emulator == "tmux":
-                # Send keystrokes to tmux session
-                session_name = f"terminal_mcp_{os.path.basename(self.socket_path)}"
-                subprocess.run(["tmux", "send-keys", "-t", session_name, input_text])
-            
-            # Wait a bit for the command to process
-            time.sleep(0.2)
+            if self.master_fd is not None:
+                os.write(self.master_fd, input_text.encode('utf-8'))
+                time.sleep(0.1)  # Small delay for output
             
             return self.output_buffer
         except Exception as e:
-            logger.error(f"Error sending input: {e}")
+            logger.error(f"Error sending input to PTY: {e}")
             return self.output_buffer
     
     def get_output(self, raw: bool = None) -> str:
@@ -337,24 +264,44 @@ echo -e "\\n__EXIT_CODE__${{exit_code}}__" | nc -U {self.socket_path}
         clean_text = re.sub(r'\x1b[PX^_].*?\x1b\\', '', clean_text)  # Remove other escape sequences
         clean_text = re.sub(r'\x1b[NO]', '', clean_text)  # Remove single-character escapes
         
+        # Remove OSC sequences (terminal-specific escape sequences)
+        clean_text = re.sub(r'\]697;[^]*?', '', clean_text)
+        clean_text = re.sub(r'\]0;[^]*?', '', clean_text)
+        
         # Remove control characters except newlines and tabs
         clean_text = ''.join(char for char in clean_text if char.isprintable() or char in '\n\t')
         
-        # Clean up excessive whitespace but preserve structure
+        # Extract shell prompts more intelligently
         lines = clean_text.split('\n')
         cleaned_lines = []
         for line in lines:
-            # Remove trailing whitespace but keep leading whitespace for indentation
-            cleaned_line = line.rstrip()
-            if cleaned_line or (cleaned_lines and cleaned_lines[-1]):  # Keep empty lines between content
-                cleaned_lines.append(cleaned_line)
+            line = line.strip()
+            
+            # Skip empty lines
+            if not line:
+                continue
+                
+            # Preserve shell prompts and command output
+            if ('$' in line and '@' in line) or line.startswith('$') or line.endswith('$'):
+                # This looks like a shell prompt
+                cleaned_lines.append(line)
+            elif line and not line.startswith('\x1b'):
+                # This looks like command output
+                cleaned_lines.append(line)
         
-        # Join lines and limit length
+        # Join lines and add some context
         result = '\n'.join(cleaned_lines)
+        
+        # If we have output, try to show the last few lines including any prompts
+        if result:
+            lines = result.split('\n')
+            if len(lines) > 20:  # Show last 20 lines
+                result = '\n'.join(lines[-20:])
+        
         if len(result) > 2000:  # Limit output length
             result = result[:2000] + "\n... (truncated)"
         
-        return result if result.strip() else "No readable content found"
+        return result if result.strip() else "Terminal ready (no visible output yet)"
     
     def is_running(self) -> bool:
         """Check if the process is still running.
@@ -381,33 +328,18 @@ echo -e "\\n__EXIT_CODE__${{exit_code}}__" | nc -U {self.socket_path}
             except Exception as e:
                 logger.error(f"Error terminating process: {e}")
         
-        # Clean up tmux session if used
-        if self.emulator == "tmux":
+        # Close PTY
+        if self.master_fd is not None:
             try:
-                session_name = f"terminal_mcp_{os.path.basename(self.socket_path)}"
-                subprocess.run(["tmux", "kill-session", "-t", session_name], 
-                               stderr=subprocess.DEVNULL)
-            except Exception as e:
-                logger.error(f"Error cleaning up tmux session: {e}")
-        
-        self.cleanup()
+                os.close(self.master_fd)
+            except:
+                pass
     
     def cleanup(self) -> None:
         """Clean up resources."""
         try:
-            # Close socket
-            if hasattr(self, 'server_socket'):
-                self.server_socket.close()
-            
-            # Remove socket file and directory
-            if hasattr(self, 'socket_path') and os.path.exists(self.socket_path):
-                os.unlink(self.socket_path)
-            
-            if hasattr(self, 'script_path') and os.path.exists(self.script_path):
-                os.unlink(self.script_path)
-            
-            if hasattr(self, 'socket_dir') and os.path.exists(self.socket_dir):
-                os.rmdir(self.socket_dir)
+            if self.master_fd is not None:
+                os.close(self.master_fd)
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
 
