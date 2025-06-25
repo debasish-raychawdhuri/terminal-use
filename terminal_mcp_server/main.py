@@ -13,7 +13,7 @@ import time
 from typing import Dict, List, Optional, Any
 
 from terminal_mcp_server.terminal_manager import TerminalManager
-from terminal_mcp_server.ansi_to_html_2d import convert_ansi_to_html_2d
+from terminal_mcp_server.ansi_to_html_linear import convert_ansi_to_html_linear
 
 # Configure logging to stderr to avoid interfering with stdio communication
 logging.basicConfig(
@@ -390,10 +390,10 @@ class MCPServer:
                             logger.debug(f"Error getting raw output: {e}")
                             raw_output = f"Error retrieving session output: {str(e)}"
                         
-                        # Convert to HTML - NO SIZE LIMITS
+                        # Convert to HTML with comprehensive ANSI support
                         title = tool_args.get("title", "Terminal Output")
                         try:
-                            html_content = convert_ansi_to_html_2d(raw_output, title, width=120, height=40)
+                            html_content = convert_ansi_to_html_linear(raw_output, title)
                             logger.debug(f"Generated HTML content - length: {len(html_content)}")
                             
                         except Exception as e:
