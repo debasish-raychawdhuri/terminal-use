@@ -246,15 +246,20 @@ class MCPServer:
                         running = session.is_running()
                         exit_code = getattr(session, 'exit_code', None)
                         
-                        # Get output with size limit to prevent hanging
-                        if hasattr(session, 'get_output'):
-                            raw_output = tool_args.get("raw_output", False)
-                            if raw_output:
-                                output = getattr(session, 'output_buffer', '')[:5000]  # Limit raw output
-                            else:
-                                output = session.get_screen_content()[:5000]  # Limit screen content
+                        # Get output based on session type
+                        raw_output = tool_args.get("raw_output", False)
+                        if hasattr(session, 'get_screen_content') and not raw_output:
+                            # TerminalEmulatorSession - use screen content
+                            output = session.get_screen_content()[:5000]
+                        elif hasattr(session, 'get_output'):
+                            # TerminalEmulatorSession - use get_output method
+                            output = session.get_output(raw=raw_output)[:5000]
                         else:
-                            output = "No output available"
+                            # TerminalSession - use output_buffer
+                            if raw_output and hasattr(session, 'raw_output_buffer'):
+                                output = session.raw_output_buffer[:5000]
+                            else:
+                                output = getattr(session, 'output_buffer', '')[:5000]
                         
                         logger.info(f"Got session state - output length: {len(output)}, running: {running}")
                         
