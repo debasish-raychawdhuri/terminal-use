@@ -373,7 +373,7 @@ class MCPServer:
                         # Get session and raw output
                         session = self.terminal_manager.sessions[tool_args["session_id"]]
                         
-                        # Get raw output with ANSI sequences, but limit size to prevent hanging
+                        # Get raw output with ANSI sequences - NO TRUNCATION
                         raw_output = ""
                         try:
                             if hasattr(session, 'get_screen_content'):
@@ -385,42 +385,28 @@ class MCPServer:
                             else:
                                 # TerminalSession - use raw_output_buffer
                                 raw_output = getattr(session, 'raw_output_buffer', '')
-                            
-                            # Limit raw output size to prevent client hanging (max 10KB of raw terminal data)
-                            if len(raw_output) > 10240:
-                                raw_output = raw_output[-10240:]  # Keep last 10KB
-                                raw_output = "... (output truncated) ...\n" + raw_output
                                 
                         except Exception as e:
                             logger.debug(f"Error getting raw output: {e}")
                             raw_output = f"Error retrieving session output: {str(e)}"
                         
-                        # Convert to HTML with size limits
+                        # Convert to HTML - NO SIZE LIMITS
                         title = tool_args.get("title", "Terminal Output")
                         try:
                             html_content = convert_ansi_to_html(raw_output, title)
-                            
-                            # Additional safety check - limit final HTML size (max 50KB)
-                            if len(html_content) > 51200:
-                                # If HTML is too large, provide a truncated version
-                                truncated_raw = raw_output[:2048] if len(raw_output) > 2048 else raw_output
-                                html_content = convert_ansi_to_html(
-                                    truncated_raw + "\n\n... (HTML output truncated due to size) ...", 
-                                    title
-                                )
-                            
                             logger.debug(f"Generated HTML content - length: {len(html_content)}")
                             
                         except Exception as e:
                             logger.debug(f"Error converting to HTML: {e}")
                             # Fallback to plain text if HTML conversion fails
+                            escaped_output = raw_output.replace('<', '&lt;').replace('>', '&gt;').replace('&', '&amp;')
                             html_content = f"""<!DOCTYPE html>
 <html><head><title>{title}</title></head>
 <body><pre style="font-family: monospace; background: black; color: white; padding: 20px;">
 Error converting ANSI to HTML: {str(e)}
 
 Raw output:
-{raw_output[:1000]}{'...' if len(raw_output) > 1000 else ''}
+{escaped_output}
 </pre></body></html>"""
                         
                         return {
