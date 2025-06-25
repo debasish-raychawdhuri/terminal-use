@@ -14,6 +14,7 @@ from typing import Dict, List, Optional, Any
 
 from terminal_mcp_server.terminal_manager import TerminalManager
 from terminal_mcp_server.ansi_to_html_linear import convert_ansi_to_html_linear
+from terminal_mcp_server.ansi_to_text_2d import convert_ansi_to_text_2d, convert_ansi_to_text_linear
 
 # Configure logging to stderr to avoid interfering with stdio communication
 logging.basicConfig(
@@ -133,6 +134,25 @@ def get_tools_definition():
                         "type": "string",
                         "description": "Title for the HTML document",
                         "default": "Terminal Output"
+                    }
+                },
+                "required": ["session_id"]
+            }
+        },
+        {
+            "name": "get_session_text",
+            "description": "Get the current state of a terminal session as plain text with ANSI colors removed but proper 2D layout preserved",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "The session ID for the terminal session"
+                    },
+                    "use_2d_layout": {
+                        "type": "boolean",
+                        "description": "Whether to use 2D layout processing for TUI applications (default: true)",
+                        "default": True
                     }
                 },
                 "required": ["session_id"]
@@ -441,6 +461,98 @@ Raw output:
                                 "content": [{
                                     "type": "text",
                                     "text": f"Error generating HTML: {str(e)}"
+                                }]
+                            }
+                        }
+                
+                elif tool_name == "get_session_text":
+                    try:
+                        logger.debug(f"Getting session text for {tool_args['session_id']}")
+                        
+                        # Check if session exists first
+                        if tool_args["session_id"] not in self.terminal_manager.sessions:
+                            logger.debug(f"Session {tool_args['session_id']} not found")
+                            return {
+                                "jsonrpc": "2.0",
+                                "id": req_id,
+                                "result": {
+                                    "content": [{
+                                        "type": "text",
+                                        "text": f"Session {tool_args['session_id']} not found or has been terminated"
+                                    }]
+                                }
+                            }
+                        
+                        # Get session and raw output
+                        session = self.terminal_manager.sessions[tool_args["session_id"]]
+                        
+                        # Get raw output with ANSI sequences
+                        raw_output = ""
+                        try:
+                            if hasattr(session, 'get_output'):
+                                # TerminalEmulatorSession - use get_output method with raw=True
+                                raw_output = session.get_output(raw=True)
+                            elif hasattr(session, 'raw_output_buffer'):
+                                # TerminalSession - use raw_output_buffer
+                                raw_output = session.raw_output_buffer
+                            else:
+                                # Fallback - try to get any output
+                                raw_output = getattr(session, 'output_buffer', '')
+                                
+                        except Exception as e:
+                            logger.debug(f"Error getting raw output: {e}")
+                            raw_output = f"Error retrieving session output: {str(e)}"
+                        
+                        # Convert to plain text
+                        use_2d_layout = tool_args.get("use_2d_layout", True)
+                        try:
+                            if use_2d_layout:
+                                # Use 2D layout for TUI applications
+                                text_content = convert_ansi_to_text_2d(raw_output, width=120, height=40)
+                            else:
+                                # Use linear processing for simple commands
+                                text_content = convert_ansi_to_text_linear(raw_output)
+                            
+                            logger.debug(f"Generated text content - length: {len(text_content)}")
+                            
+                        except Exception as e:
+                            logger.debug(f"Error converting to text: {e}")
+                            # Fallback to raw output with basic ANSI removal
+                            import re
+                            text_content = re.sub(r'\x1b\[[0-9;?]*[a-zA-Z]', '', raw_output)
+                        
+                        return {
+                            "jsonrpc": "2.0",
+                            "id": req_id,
+                            "result": {
+                                "content": [{
+                                    "type": "text",
+                                    "text": text_content
+                                }]
+                            }
+                        }
+                        
+                    except KeyError as e:
+                        logger.debug(f"Session not found: {e}")
+                        return {
+                            "jsonrpc": "2.0",
+                            "id": req_id,
+                            "result": {
+                                "content": [{
+                                    "type": "text",
+                                    "text": f"Session not found: {str(e)}"
+                                }]
+                            }
+                        }
+                    except Exception as e:
+                        logger.debug(f"Error in get_session_text: {e}")
+                        return {
+                            "jsonrpc": "2.0",
+                            "id": req_id,
+                            "result": {
+                                "content": [{
+                                    "type": "text",
+                                    "text": f"Error generating text: {str(e)}"
                                 }]
                             }
                         }
