@@ -320,19 +320,29 @@ class TerminalManager:
         
         session = self.sessions[session_id]
         
-        # Get current state
-        if hasattr(session, 'get_output') and callable(getattr(session, 'get_output')):
-            if raw_output is not None and 'raw' in session.get_output.__code__.co_varnames:
-                output = session.get_output(raw=raw_output)
+        try:
+            # Get current state with timeout protection
+            if hasattr(session, 'get_output') and callable(getattr(session, 'get_output')):
+                if raw_output is not None and 'raw' in session.get_output.__code__.co_varnames:
+                    output = session.get_output(raw=raw_output)
+                else:
+                    output = session.get_output()
             else:
-                output = session.get_output()
-        else:
-            output = ""
-        
-        exit_code = getattr(session, 'exit_code', None)
-        running = session.is_running()
-        
-        return output, exit_code, running
+                output = getattr(session, 'output_buffer', '')
+            
+            # Limit output size to prevent hanging
+            if len(output) > 8000:
+                output = output[:8000] + f"\n... (truncated from {len(output)} chars)"
+            
+            exit_code = getattr(session, 'exit_code', None)
+            running = session.is_running() if hasattr(session, 'is_running') else False
+            
+            return output, exit_code, running
+            
+        except Exception as e:
+            logger.error(f"Error getting session state: {e}")
+            # Return safe defaults if there's an error
+            return f"Error getting session state: {str(e)}", None, False
     
     def terminate_session(self, session_id: str) -> None:
         """Terminate a terminal session.

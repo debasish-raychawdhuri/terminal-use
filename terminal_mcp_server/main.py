@@ -208,19 +208,93 @@ class MCPServer:
                     }
                 
                 elif tool_name == "get_session":
-                    output, exit_code, running = self.terminal_manager.get_session_state(
-                        tool_args["session_id"], tool_args.get("raw_output")
-                    )
-                    return {
-                        "jsonrpc": "2.0",
-                        "id": req_id,
-                        "result": {
-                            "content": [{
-                                "type": "text",
-                                "text": f"Output:\n{output}\nExit Code: {exit_code}\nRunning: {running}"
-                            }]
+                    try:
+                        logger.info(f"Getting session state for {tool_args['session_id']}")
+                        
+                        # Check if session exists first
+                        if tool_args["session_id"] not in self.terminal_manager.sessions:
+                            logger.warning(f"Session {tool_args['session_id']} not found")
+                            return {
+                                "jsonrpc": "2.0",
+                                "id": req_id,
+                                "result": {
+                                    "content": [{
+                                        "type": "text",
+                                        "text": f"Session {tool_args['session_id']} not found or has been terminated"
+                                    }]
+                                }
+                            }
+                        
+                        # Get session state with timeout protection
+                        session = self.terminal_manager.sessions[tool_args["session_id"]]
+                        
+                        # Quick check if session is still valid
+                        if not hasattr(session, 'is_running'):
+                            logger.error(f"Invalid session object for {tool_args['session_id']}")
+                            return {
+                                "jsonrpc": "2.0",
+                                "id": req_id,
+                                "result": {
+                                    "content": [{
+                                        "type": "text",
+                                        "text": f"Session {tool_args['session_id']} is invalid"
+                                    }]
+                                }
+                            }
+                        
+                        # Get the state quickly
+                        running = session.is_running()
+                        exit_code = getattr(session, 'exit_code', None)
+                        
+                        # Get output with size limit to prevent hanging
+                        if hasattr(session, 'get_output'):
+                            raw_output = tool_args.get("raw_output", False)
+                            if raw_output:
+                                output = getattr(session, 'output_buffer', '')[:5000]  # Limit raw output
+                            else:
+                                output = session.get_screen_content()[:5000]  # Limit screen content
+                        else:
+                            output = "No output available"
+                        
+                        logger.info(f"Got session state - output length: {len(output)}, running: {running}")
+                        
+                        response = {
+                            "jsonrpc": "2.0",
+                            "id": req_id,
+                            "result": {
+                                "content": [{
+                                    "type": "text",
+                                    "text": f"Output:\n{output}\nExit Code: {exit_code}\nRunning: {running}"
+                                }]
+                            }
                         }
-                    }
+                        logger.info("Returning get_session response")
+                        return response
+                        
+                    except KeyError as e:
+                        logger.error(f"Session not found: {e}")
+                        return {
+                            "jsonrpc": "2.0",
+                            "id": req_id,
+                            "result": {
+                                "content": [{
+                                    "type": "text",
+                                    "text": f"Session not found: {str(e)}"
+                                }]
+                            }
+                        }
+                    except Exception as e:
+                        logger.error(f"Error in get_session: {e}")
+                        return {
+                            "jsonrpc": "2.0",
+                            "id": req_id,
+                            "result": {
+                                "content": [{
+                                    "type": "text",
+                                    "text": f"Error getting session state: {str(e)}"
+                                }]
+                            }
+                        }
                 
                 elif tool_name == "terminate_session":
                     self.terminal_manager.terminate_session(tool_args["session_id"])
