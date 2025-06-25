@@ -125,7 +125,7 @@ Get the current state of a terminal session rendered as HTML with proper ANSI co
 - **Full ANSI support**: 16 standard colors, 256-color palette, and RGB colors
 - **Text formatting**: Bold, italic, underline, strikethrough, blink, reverse video
 - **Background colors**: Full support for background color sequences
-- **Safety limits**: Prevents hanging with size and processing limits
+- **Complete output**: No truncation - full terminal output is preserved
 - **Complete HTML**: Generates full HTML documents with CSS styling
 - **Terminal styling**: Authentic terminal appearance with monospace fonts
 
@@ -192,9 +192,10 @@ html_content = get_session_html(session_id="<session_id>", title="Colorful Direc
 ```
 
 **HTML Features:**
-- **Safety limits**: Prevents browser hanging with size limits (50KB input, 100KB HTML)
+- **Complete output**: No truncation - full terminal output is preserved
+- **Full color fidelity**: All ANSI colors converted accurately to HTML
 - **Error handling**: Graceful fallback to plain text if conversion fails
-- **Performance**: Optimized processing with timeout protection
+- **Performance**: Optimized processing for reliable operation
 - **Compatibility**: Works with all terminal applications and TUI programs
 
 ## Troubleshooting
@@ -262,9 +263,9 @@ html_content = get_session_html(session_id="<session_id>", title="Colorful Direc
 **Problem**: HTML generation is slow
 
 **Solutions**:
-1. The system has built-in safety limits (50KB input, 100KB HTML)
-2. Large terminal buffers are automatically truncated
-3. Consider terminating and restarting sessions with large output
+1. HTML conversion is optimized for performance
+2. Large terminal outputs are processed efficiently
+3. Consider using `get_session` for text-only output if HTML is not needed
 
 ## Development
 
