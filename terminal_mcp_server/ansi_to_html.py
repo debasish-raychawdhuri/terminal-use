@@ -288,13 +288,41 @@ class AnsiToHtmlConverter:
         """Convert ANSI text to HTML."""
         self.reset_state()
         
+        # Limit input size to prevent excessive processing
+        if len(text) > 50000:  # 50KB limit
+            text = text[-50000:]  # Keep last 50KB
+            text = "... (input truncated) ...\n" + text
+        
         # Split text into lines for processing
         lines = text.split('\n')
         html_lines = []
         
-        for line in lines:
-            html_line = self.convert_line_to_html(line)
-            html_lines.append(html_line)
+        # Limit number of lines to prevent excessive processing
+        max_lines = 1000
+        if len(lines) > max_lines:
+            lines = lines[-max_lines:]  # Keep last 1000 lines
+            html_lines.append("... (lines truncated) ...")
+        
+        for line_num, line in enumerate(lines):
+            try:
+                # Limit line length to prevent excessive processing
+                if len(line) > 2000:  # 2KB per line limit
+                    line = line[:2000] + "... (line truncated)"
+                
+                html_line = self.convert_line_to_html(line)
+                html_lines.append(html_line)
+                
+                # Safety check - if processing is taking too long, break
+                if line_num > 0 and line_num % 100 == 0:
+                    # Every 100 lines, check if we should continue
+                    total_html_size = sum(len(l) for l in html_lines)
+                    if total_html_size > 100000:  # 100KB HTML limit
+                        html_lines.append("... (output truncated due to size) ...")
+                        break
+                        
+            except Exception as e:
+                # If a line fails to convert, add it as plain text
+                html_lines.append(f"[Error converting line: {str(e)}]")
         
         # Generate complete HTML document
         css = self.generate_css()
@@ -324,14 +352,22 @@ class AnsiToHtmlConverter:
         result = []
         current_style = ""
         i = 0
+        max_iterations = len(line) * 2  # Safety limit to prevent infinite loops
+        iterations = 0
         
-        while i < len(line):
+        while i < len(line) and iterations < max_iterations:
+            iterations += 1
+            
             # Look for ANSI escape sequences
             csi_match = self.CSI_PATTERN.match(line, i)
             if csi_match:
                 # Process CSI sequence
                 params_str, command = csi_match.groups()
-                self.process_csi_sequence(params_str, command)
+                try:
+                    self.process_csi_sequence(params_str, command)
+                except Exception as e:
+                    # Skip problematic escape sequences
+                    pass
                 i = csi_match.end()
                 
                 # Check if style changed
@@ -372,6 +408,9 @@ class AnsiToHtmlConverter:
                 result.append('&#39;')
             elif char == '\t':
                 result.append('    ')  # Convert tabs to 4 spaces
+            elif ord(char) < 32 and char not in ['\n', '\r']:
+                # Skip other control characters that aren't handled
+                pass
             else:
                 result.append(char)
             

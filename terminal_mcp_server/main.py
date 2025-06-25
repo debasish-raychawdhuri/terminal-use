@@ -354,11 +354,11 @@ class MCPServer:
                 
                 elif tool_name == "get_session_html":
                     try:
-                        logger.info(f"Getting session HTML for {tool_args['session_id']}")
+                        logger.debug(f"Getting session HTML for {tool_args['session_id']}")
                         
                         # Check if session exists first
                         if tool_args["session_id"] not in self.terminal_manager.sessions:
-                            logger.warning(f"Session {tool_args['session_id']} not found")
+                            logger.debug(f"Session {tool_args['session_id']} not found")
                             return {
                                 "jsonrpc": "2.0",
                                 "id": req_id,
@@ -373,22 +373,55 @@ class MCPServer:
                         # Get session and raw output
                         session = self.terminal_manager.sessions[tool_args["session_id"]]
                         
-                        # Get raw output with ANSI sequences
-                        if hasattr(session, 'get_screen_content'):
-                            # TerminalEmulatorSession - use screen content
-                            raw_output = session.get_screen_content()
-                        elif hasattr(session, 'get_output'):
-                            # TerminalEmulatorSession - use get_output method with raw=True
-                            raw_output = session.get_output(raw=True)
-                        else:
-                            # TerminalSession - use raw_output_buffer
-                            raw_output = getattr(session, 'raw_output_buffer', '')
+                        # Get raw output with ANSI sequences, but limit size to prevent hanging
+                        raw_output = ""
+                        try:
+                            if hasattr(session, 'get_screen_content'):
+                                # TerminalEmulatorSession - use screen content
+                                raw_output = session.get_screen_content()
+                            elif hasattr(session, 'get_output'):
+                                # TerminalEmulatorSession - use get_output method with raw=True
+                                raw_output = session.get_output(raw=True)
+                            else:
+                                # TerminalSession - use raw_output_buffer
+                                raw_output = getattr(session, 'raw_output_buffer', '')
+                            
+                            # Limit raw output size to prevent client hanging (max 10KB of raw terminal data)
+                            if len(raw_output) > 10240:
+                                raw_output = raw_output[-10240:]  # Keep last 10KB
+                                raw_output = "... (output truncated) ...\n" + raw_output
+                                
+                        except Exception as e:
+                            logger.debug(f"Error getting raw output: {e}")
+                            raw_output = f"Error retrieving session output: {str(e)}"
                         
-                        # Convert to HTML
+                        # Convert to HTML with size limits
                         title = tool_args.get("title", "Terminal Output")
-                        html_content = convert_ansi_to_html(raw_output, title)
-                        
-                        logger.info(f"Generated HTML content - length: {len(html_content)}")
+                        try:
+                            html_content = convert_ansi_to_html(raw_output, title)
+                            
+                            # Additional safety check - limit final HTML size (max 50KB)
+                            if len(html_content) > 51200:
+                                # If HTML is too large, provide a truncated version
+                                truncated_raw = raw_output[:2048] if len(raw_output) > 2048 else raw_output
+                                html_content = convert_ansi_to_html(
+                                    truncated_raw + "\n\n... (HTML output truncated due to size) ...", 
+                                    title
+                                )
+                            
+                            logger.debug(f"Generated HTML content - length: {len(html_content)}")
+                            
+                        except Exception as e:
+                            logger.debug(f"Error converting to HTML: {e}")
+                            # Fallback to plain text if HTML conversion fails
+                            html_content = f"""<!DOCTYPE html>
+<html><head><title>{title}</title></head>
+<body><pre style="font-family: monospace; background: black; color: white; padding: 20px;">
+Error converting ANSI to HTML: {str(e)}
+
+Raw output:
+{raw_output[:1000]}{'...' if len(raw_output) > 1000 else ''}
+</pre></body></html>"""
                         
                         return {
                             "jsonrpc": "2.0",
@@ -402,7 +435,7 @@ class MCPServer:
                         }
                         
                     except KeyError as e:
-                        logger.error(f"Session not found: {e}")
+                        logger.debug(f"Session not found: {e}")
                         return {
                             "jsonrpc": "2.0",
                             "id": req_id,
@@ -414,7 +447,7 @@ class MCPServer:
                             }
                         }
                     except Exception as e:
-                        logger.error(f"Error in get_session_html: {e}")
+                        logger.debug(f"Error in get_session_html: {e}")
                         return {
                             "jsonrpc": "2.0",
                             "id": req_id,
