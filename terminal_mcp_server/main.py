@@ -159,6 +159,11 @@ class MCPServer:
                     }
                 }
             
+            elif method == "initialized":
+                # This is a notification, no response needed
+                logger.info("Received initialized notification")
+                return None
+            
             elif method == "tools/list":
                 return {
                     "jsonrpc": "2.0",
@@ -433,9 +438,12 @@ class MCPServer:
                     # Handle request synchronously
                     response = asyncio.run(self.handle_request(request))
                     
-                    # Send response to stdout
-                    logger.debug(f"Sending response: {json.dumps(response)}")
-                    print(json.dumps(response), flush=True)
+                    # Send response to stdout (only if there is a response)
+                    if response is not None:
+                        logger.debug(f"Sending response: {json.dumps(response)}")
+                        print(json.dumps(response), flush=True)
+                    else:
+                        logger.debug("No response needed (notification)")
                     
                 except Exception as e:
                     logger.error(f"Error in input reader: {e}", exc_info=True)
