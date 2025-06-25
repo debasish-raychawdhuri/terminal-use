@@ -299,18 +299,42 @@ class Terminal2DRenderer:
         if cell.reverse:
             fg_color, bg_color = bg_color, fg_color
         
-        # Colors
+        # Colors with bold handling for bright colors
         if fg_color:
-            styles.append(f'color: {fg_color}')
+            # Check if this is a basic color that should be brightened by bold
+            if cell.bold and fg_color in self.STANDARD_COLORS.values():
+                # Find the color index
+                for idx, color in self.STANDARD_COLORS.items():
+                    if color == fg_color and idx < 8:
+                        # Convert to bright version (add 8)
+                        bright_color = self.STANDARD_COLORS[idx + 8]
+                        styles.append(f'color: {bright_color}')
+                        break
+                else:
+                    styles.append(f'color: {fg_color}')
+            else:
+                styles.append(f'color: {fg_color}')
         else:
             styles.append('color: #C0C0C0')  # Default terminal foreground
         
         if bg_color:
-            styles.append(f'background-color: {bg_color}')
+            # Similar handling for background colors
+            if cell.bold and bg_color in self.STANDARD_COLORS.values():
+                for idx, color in self.STANDARD_COLORS.items():
+                    if color == bg_color and idx < 8:
+                        bright_color = self.STANDARD_COLORS[idx + 8]
+                        styles.append(f'background-color: {bright_color}')
+                        break
+                else:
+                    styles.append(f'background-color: {bg_color}')
+            else:
+                styles.append(f'background-color: {bg_color}')
         
-        # Text formatting
+        # Text formatting (but don't add font-weight: bold if we used it for color brightening)
         if cell.bold:
-            styles.append('font-weight: bold')
+            # Only add bold styling if the color wasn't brightened
+            if not fg_color or fg_color not in [self.STANDARD_COLORS[i] for i in range(8)]:
+                styles.append('font-weight: bold')
         
         if cell.dim:
             styles.append('opacity: 0.5')
