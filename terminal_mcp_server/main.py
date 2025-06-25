@@ -360,7 +360,10 @@ class MCPServer:
     
     def run_sync(self):
         """Run the MCP server using stdin/stdout synchronously."""
-        logger.error("Starting MCP server with stdio transport")
+        logger.info("Starting MCP server with stdio transport")
+        
+        # Record start time for timeout check
+        self.start_time = time.time()
         
         # Start input reader thread
         input_thread = threading.Thread(target=self._read_input, daemon=True)
@@ -372,16 +375,16 @@ class MCPServer:
                 time.sleep(0.1)
                 
                 # If we haven't been initialized after 30 seconds, that's probably an error
-                if not self.initialized and time.time() - getattr(self, 'start_time', time.time()) > 30:
+                if not self.initialized and time.time() - self.start_time > 30:
                     logger.error("No initialization received after 30 seconds, shutting down")
                     break
                     
         except KeyboardInterrupt:
-            logger.error("KeyboardInterrupt received, exiting")
+            logger.info("KeyboardInterrupt received, exiting")
         except Exception as e:
             logger.error(f"Fatal error in server: {e}", exc_info=True)
         finally:
-            logger.error("MCP server shutting down")
+            logger.info("MCP server shutting down")
             self.running = False
     
     def _read_input(self):
