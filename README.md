@@ -52,7 +52,13 @@ pip install pexpect
 }
 ```
 
-2. **Alternative configuration** (if shell script doesn't work):
+2. **Verify the setup**:
+   - The server should load without the "failed to load" error
+   - You should see terminal-related tools available in Amazon Q
+
+### Windsurf Setup
+
+1. **Configure Windsurf** to use the terminal MCP server:
 
 ```json
 {
@@ -65,38 +71,7 @@ pip install pexpect
 }
 ```
 
-3. **Verify the setup**:
-   - The server should load without the "failed to load" error
-   - You should see terminal-related tools available in Amazon Q
-
-### Windsurf Setup
-
-1. **Configure Windsurf** to use the terminal MCP server:
-
-```json
-{
-  "mcpServers": {
-    "terminal": {
-      "command": "bash",
-      "args": ["-c", "cd /home/debasish/work/talentica/terminal-mcp-server && PYTHONPATH=. python terminal_mcp_server/main.py"]
-    }
-  }
-}
-```
-
-2. **Alternative simple configuration**:
-
-```json
-{
-  "mcpServers": {
-    "terminal": {
-      "command": "/home/debasish/work/talentica/terminal-mcp-server/start_mcp_server.sh"
-    }
-  }
-}
-```
-
-3. **Verify the setup**:
+2. **Verify the setup**:
    - Windsurf should successfully connect to the MCP server
    - Terminal tools should be available in the Windsurf interface
 
