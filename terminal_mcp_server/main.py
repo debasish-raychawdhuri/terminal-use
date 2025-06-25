@@ -399,7 +399,7 @@ class MCPServer:
                     if not line:
                         # EOF reached, but don't exit immediately
                         # This might be normal behavior for some MCP clients
-                        logger.error("Stdin EOF received")
+                        logger.info("Stdin EOF received")
                         time.sleep(1)  # Wait a bit before continuing
                         continue
                     
@@ -407,7 +407,7 @@ class MCPServer:
                     if not line:
                         continue
                     
-                    logger.error(f"Received request: {line}")
+                    logger.debug(f"Received request: {line}")
                     
                     # Parse JSON-RPC request
                     try:
@@ -434,7 +434,7 @@ class MCPServer:
                     response = asyncio.run(self.handle_request(request))
                     
                     # Send response to stdout
-                    logger.error(f"Sending response: {json.dumps(response)}")
+                    logger.debug(f"Sending response: {json.dumps(response)}")
                     print(json.dumps(response), flush=True)
                     
                 except Exception as e:
@@ -445,7 +445,7 @@ class MCPServer:
         except Exception as e:
             logger.error(f"Fatal error in input reader: {e}", exc_info=True)
         finally:
-            logger.error("Input reader thread shutting down")
+            logger.info("Input reader thread shutting down")
 def main():
     """Run the MCP server."""
     parser = argparse.ArgumentParser(description="Terminal MCP Server")
