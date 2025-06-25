@@ -114,6 +114,21 @@ List all active terminal sessions.
 
 **Parameters:** None
 
+### 6. `get_session_html`
+Get the current state of a terminal session rendered as HTML with proper ANSI color and formatting support.
+
+**Parameters:**
+- `session_id` (required): The terminal session ID
+- `title` (optional): Title for the HTML document (default: "Terminal Output")
+
+**Features:**
+- **Full ANSI support**: 16 standard colors, 256-color palette, and RGB colors
+- **Text formatting**: Bold, italic, underline, strikethrough, blink, reverse video
+- **Background colors**: Full support for background color sequences
+- **Safety limits**: Prevents hanging with size and processing limits
+- **Complete HTML**: Generates full HTML documents with CSS styling
+- **Terminal styling**: Authentic terminal appearance with monospace fonts
+
 ## Usage Examples
 
 ### Basic Command Execution
@@ -150,9 +165,37 @@ get_session(session_id="<session_id>")
 # List all sessions
 list_sessions()
 
+# Get HTML representation of terminal session
+get_session_html(session_id="<session_id>", title="My Terminal Session")
+
 # Clean up
 terminate_session(session_id="<session_id>")
 ```
+
+### HTML Terminal Rendering
+
+The `get_session_html` tool provides rich HTML rendering of terminal sessions:
+
+```bash
+# Run a colorful command
+run_command(command="ls --color=always")
+
+# Get the HTML representation
+html_content = get_session_html(session_id="<session_id>", title="Colorful Directory Listing")
+
+# The HTML includes:
+# - Full ANSI color support (16 colors, 256-color palette, RGB)
+# - Text formatting (bold, italic, underline, strikethrough)
+# - Background colors and reverse video
+# - Authentic terminal styling with monospace fonts
+# - Complete HTML document ready for display or saving
+```
+
+**HTML Features:**
+- **Safety limits**: Prevents browser hanging with size limits (50KB input, 100KB HTML)
+- **Error handling**: Graceful fallback to plain text if conversion fails
+- **Performance**: Optimized processing with timeout protection
+- **Compatibility**: Works with all terminal applications and TUI programs
 
 ## Troubleshooting
 
@@ -197,6 +240,31 @@ terminate_session(session_id="<session_id>")
 1. Make scripts executable: `chmod +x *.sh`
 2. Check file ownership: `ls -la`
 3. Ensure proper directory permissions
+
+### HTML Rendering Issues
+
+**Problem**: Windsurf hangs when using `get_session_html`
+
+**Solutions**:
+1. Use the diagnostic script: `python3 windsurf_debug.py`
+2. Try the minimal server configuration first
+3. Check browser developer console for errors
+4. Verify terminal session has reasonable output size
+
+**Problem**: HTML output appears incorrect
+
+**Solutions**:
+1. Check that terminal session contains ANSI escape sequences
+2. Use `get_session(raw_output=True)` to verify raw output
+3. Test with simple colored commands first: `echo -e '\\033[31mRed\\033[0m'`
+4. Save HTML to file and open in browser for inspection
+
+**Problem**: HTML generation is slow
+
+**Solutions**:
+1. The system has built-in safety limits (50KB input, 100KB HTML)
+2. Large terminal buffers are automatically truncated
+3. Consider terminating and restarting sessions with large output
 
 ## Development
 
