@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "terminal-minimal": {
+      "command": "/usr/bin/python",
+      "args": [
+        "/home/debasish/work/talentica/terminal-mcp-server/minimal_mcp_server.py"
+      ]
+    },
+    "terminal-full": {
+      "command": "/usr/bin/python",
+      "args": [
+        "/home/debasish/work/talentica/terminal-mcp-server/run_server.py"
+      ]
+    }
+  }
+}
