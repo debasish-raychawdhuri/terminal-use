@@ -330,10 +330,6 @@ class TerminalManager:
             else:
                 output = getattr(session, 'output_buffer', '')
             
-            # Limit output size to prevent hanging
-            if len(output) > 8000:
-                output = output[:8000] + f"\n... (truncated from {len(output)} chars)"
-            
             exit_code = getattr(session, 'exit_code', None)
             running = session.is_running() if hasattr(session, 'is_running') else False
             
