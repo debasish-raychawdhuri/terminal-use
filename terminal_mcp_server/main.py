@@ -13,6 +13,7 @@ import time
 from typing import Dict, List, Optional, Any
 
 from terminal_mcp_server.terminal_manager import TerminalManager
+from terminal_mcp_server.ansi_to_html import convert_ansi_to_html
 
 # Configure logging to stderr to avoid interfering with stdio communication
 logging.basicConfig(
@@ -116,6 +117,25 @@ def get_tools_definition():
             "inputSchema": {
                 "type": "object",
                 "properties": {}
+            }
+        },
+        {
+            "name": "get_session_html",
+            "description": "Get the current state of a terminal session rendered as HTML with proper ANSI color and formatting support",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "The session ID for the terminal session"
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "Title for the HTML document",
+                        "default": "Terminal Output"
+                    }
+                },
+                "required": ["session_id"]
             }
         }
     ]
@@ -331,6 +351,80 @@ class MCPServer:
                             }]
                         }
                     }
+                
+                elif tool_name == "get_session_html":
+                    try:
+                        logger.info(f"Getting session HTML for {tool_args['session_id']}")
+                        
+                        # Check if session exists first
+                        if tool_args["session_id"] not in self.terminal_manager.sessions:
+                            logger.warning(f"Session {tool_args['session_id']} not found")
+                            return {
+                                "jsonrpc": "2.0",
+                                "id": req_id,
+                                "result": {
+                                    "content": [{
+                                        "type": "text",
+                                        "text": f"Session {tool_args['session_id']} not found or has been terminated"
+                                    }]
+                                }
+                            }
+                        
+                        # Get session and raw output
+                        session = self.terminal_manager.sessions[tool_args["session_id"]]
+                        
+                        # Get raw output with ANSI sequences
+                        if hasattr(session, 'get_screen_content'):
+                            # TerminalEmulatorSession - use screen content
+                            raw_output = session.get_screen_content()
+                        elif hasattr(session, 'get_output'):
+                            # TerminalEmulatorSession - use get_output method with raw=True
+                            raw_output = session.get_output(raw=True)
+                        else:
+                            # TerminalSession - use raw_output_buffer
+                            raw_output = getattr(session, 'raw_output_buffer', '')
+                        
+                        # Convert to HTML
+                        title = tool_args.get("title", "Terminal Output")
+                        html_content = convert_ansi_to_html(raw_output, title)
+                        
+                        logger.info(f"Generated HTML content - length: {len(html_content)}")
+                        
+                        return {
+                            "jsonrpc": "2.0",
+                            "id": req_id,
+                            "result": {
+                                "content": [{
+                                    "type": "text",
+                                    "text": html_content
+                                }]
+                            }
+                        }
+                        
+                    except KeyError as e:
+                        logger.error(f"Session not found: {e}")
+                        return {
+                            "jsonrpc": "2.0",
+                            "id": req_id,
+                            "result": {
+                                "content": [{
+                                    "type": "text",
+                                    "text": f"Session not found: {str(e)}"
+                                }]
+                            }
+                        }
+                    except Exception as e:
+                        logger.error(f"Error in get_session_html: {e}")
+                        return {
+                            "jsonrpc": "2.0",
+                            "id": req_id,
+                            "result": {
+                                "content": [{
+                                    "type": "text",
+                                    "text": f"Error generating HTML: {str(e)}"
+                                }]
+                            }
+                        }
                 
                 else:
                     return {
