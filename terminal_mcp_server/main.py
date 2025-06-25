@@ -13,7 +13,7 @@ import time
 from typing import Dict, List, Optional, Any
 
 from terminal_mcp_server.terminal_manager import TerminalManager
-from terminal_mcp_server.ansi_to_html import convert_ansi_to_html
+from terminal_mcp_server.ansi_to_html_2d import convert_ansi_to_html_2d
 
 # Configure logging to stderr to avoid interfering with stdio communication
 logging.basicConfig(
@@ -393,7 +393,7 @@ class MCPServer:
                         # Convert to HTML - NO SIZE LIMITS
                         title = tool_args.get("title", "Terminal Output")
                         try:
-                            html_content = convert_ansi_to_html(raw_output, title)
+                            html_content = convert_ansi_to_html_2d(raw_output, title, width=120, height=40)
                             logger.debug(f"Generated HTML content - length: {len(html_content)}")
                             
                         except Exception as e:

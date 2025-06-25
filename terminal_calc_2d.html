@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terminal Calculator 2D</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #1e1e1e;
+            font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
+        }
+        
+        .terminal {
+            background-color: #000000;
+            border: 2px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            max-width: 100%;
+            overflow-x: auto;
+        }
+        
+        .terminal-content {
+            color: #C0C0C0;
+            background-color: transparent;
+            font-size: 14px;
+            line-height: 1.2;
+            margin: 0;
+            white-space: pre;
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+        
+        /* Scrollbar styling for webkit browsers */
+        .terminal::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
+        }
+        
+        .terminal::-webkit-scrollbar-track {
+            background: #1e1e1e;
+        }
+        
+        .terminal::-webkit-scrollbar-thumb {
+            background: #555;
+            border-radius: 6px;
+        }
+        
+        .terminal::-webkit-scrollbar-thumb:hover {
+            background: #777;
+        }
+    </style>
+</head>
+<body>
+    <div class="terminal">
+        <pre class="terminal-content"><span style="color: #008080">┌</span><span style="color: #008080; font-weight: bold">Calculator</span><span style="color: #008080">────────────────────────────────────────────────────────────────────────────────────────┐</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0">                                                                                                  </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #000080">┌───────────────────────────────────────────────────────────────────────────────┐</span><span style="color: #C0C0C0">    </span><span style="color: #808000">       </span><span style="color: #C0C0C0">     </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #000080">│</span><span style="color: #000080; font-weight: bold">Input: </span><span style="color: #C0C0C0">                                                                        </span><span style="color: #000080">│</span><span style="color: #C0C0C0">      </span><span style="color: #808000">   </span><span style="color: #C0C0C0">       </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #000080">└───────────────────────────────────────────────────────────────────────────────┘</span><span style="color: #C0C0C0">      </span><span style="color: #808000">  </span><span style="color: #C0C0C0">        </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808080">┌───────────────────────────────────────────────────────────────────────────────┐</span><span style="color: #C0C0C0">      </span><span style="color: #808000">  </span><span style="color: #C0C0C0">        </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808080">│</span><span style="color: #808080; font-weight: bold">Result: </span><span style="color: #C0C0C0">                                                                       </span><span style="color: #808080">│</span><span style="color: #C0C0C0">      </span><span style="color: #808000">   </span><span style="color: #C0C0C0">       </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808080">└───────────────────────────────────────────────────────────────────────────────┘</span><span style="color: #C0C0C0">  </span><span style="color: #808000">       cccc</span><span style="color: #C0C0C0">   </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">┌</span><span style="color: #808000; font-weight: bold">Help</span><span style="color: #808000">───────────────────────────────────────────────────────────────────────────┐</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #008000">Enter</span><span style="color: #C0C0C0">: Calculate                                                               </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #800000">Esc/Ctrl+C</span><span style="color: #C0C0C0">: Quit                                                               </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #808000; font-weight: bold">Examples:</span><span style="color: #C0C0C0">                                                                      </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #C0C0C0">  Simple: </span><span style="color: #FFFFFF">5 + 3</span><span style="color: #C0C0C0">                                                                </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #C0C0C0">  Complex:</span><span style="color: #808000">(</span><span style="color: #FFFFFF">2 + 3</span><span style="color: #808000">)</span><span style="color: #FFFFFF"> * </span><span style="color: #808000">(</span><span style="color: #FFFFFF">4 - 1</span><span style="color: #808000">)</span><span style="color: #C0C0C0">                                                    </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #C0C0C0">  Nested:</span><span style="color: #808000">(</span><span style="color: #FFFFFF">10 + </span><span style="color: #800080">(</span><span style="color: #FFFFFF">5 * 2</span><span style="color: #800080">)</span><span style="color: #808000">)</span><span style="color: #FFFFFF"> / 4</span><span style="color: #C0C0C0">                                                    </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #808000; font-weight: bold">Operators:</span><span style="color: #008000"> +, -, *, /</span><span style="color: #C0C0C0">                                                          </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #808000; font-weight: bold">Features:</span><span style="color: #C0C0C0">                                                                      </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #C0C0C0">  - </span><span style="color: #008080">Full arithmetic expressions</span><span style="color: #C0C0C0">                                                </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #C0C0C0">  - </span><span style="color: #008080">Parentheses for grouping</span><span style="color: #C0C0C0">                                                   </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #C0C0C0">  - </span><span style="color: #008080">Operator precedence</span><span style="color: #C0C0C0">                                                        </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                                                                               </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                                                                               </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                                                                               </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                                                                               </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                                                                               </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                                                                               </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                                                                               </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                                                                               </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                                                                               </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                                                                               </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                                                                               </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                                                                               </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                                                                               </span><span style="color: #808000">��</span><span style="color: #C0C0C0">               </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                                                                               </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                                                                               </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                                                                               </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                                                                               </span><span style="color: #808000">│</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0"> </span><span style="color: #808000">└───────────────────────────────────────────────────────────────────────────────┘</span><span style="color: #C0C0C0">                </span><span style="color: #008080">│</span>
+<span style="color: #008080">│</span><span style="color: #C0C0C0">                                                                                                  </span><span style="color: #008080">│</span>
+<span style="color: #008080">└──────────────────────────────────────────────────────────────────────────────────────────────────┘</span></pre>
+    </div>
+</body>
+</html>
