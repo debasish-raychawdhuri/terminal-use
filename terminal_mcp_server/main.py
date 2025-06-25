@@ -376,15 +376,15 @@ class MCPServer:
                         # Get raw output with ANSI sequences - NO TRUNCATION
                         raw_output = ""
                         try:
-                            if hasattr(session, 'get_screen_content'):
-                                # TerminalEmulatorSession - use screen content
-                                raw_output = session.get_screen_content()
-                            elif hasattr(session, 'get_output'):
+                            if hasattr(session, 'get_output'):
                                 # TerminalEmulatorSession - use get_output method with raw=True
                                 raw_output = session.get_output(raw=True)
-                            else:
+                            elif hasattr(session, 'raw_output_buffer'):
                                 # TerminalSession - use raw_output_buffer
-                                raw_output = getattr(session, 'raw_output_buffer', '')
+                                raw_output = session.raw_output_buffer
+                            else:
+                                # Fallback - try to get any output
+                                raw_output = getattr(session, 'output_buffer', '')
                                 
                         except Exception as e:
                             logger.debug(f"Error getting raw output: {e}")
