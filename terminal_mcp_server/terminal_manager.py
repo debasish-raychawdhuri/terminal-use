@@ -363,6 +363,146 @@ class TerminalManager:
         """
         return list(self.sessions.keys())
     
+    def session_exists(self, session_id: str) -> bool:
+        """Check if a session exists.
+        
+        Args:
+            session_id: The session ID to check
+            
+        Returns:
+            True if the session exists, False otherwise
+        """
+        return session_id in self.sessions
+    
+    def get_session_output(self, session_id: str, raw_output: bool = False) -> Optional[Dict[str, any]]:
+        """Get the output from a terminal session for live display.
+        
+        Args:
+            session_id: The session ID
+            raw_output: Whether to return raw output with ANSI sequences
+            
+        Returns:
+            Dict with session information or None if session doesn't exist
+        """
+        if session_id not in self.sessions:
+            return None
+            
+        try:
+            session = self.sessions[session_id]
+            
+            # For TUI applications, we want the current screen state, not history
+            # For regular shell sessions, we want the full history
+            if hasattr(session, 'get_screen_content') and self._is_tui_active(session):
+                # TUI app is active - show current screen state
+                output = session.get_screen_content()
+            elif hasattr(session, 'get_output'):
+                # Regular shell session - show full history
+                output = session.get_output(raw=raw_output)
+            elif hasattr(session, 'output_buffer'):
+                # Fallback to output buffer
+                output = getattr(session, 'output_buffer', '')
+            else:
+                # Last resort - use screen content
+                output = session.get_screen_content() if hasattr(session, 'get_screen_content') else ''
+            
+            return {
+                'output': output,
+                'running': session.is_running() if hasattr(session, 'is_running') else False,
+                'exit_code': getattr(session, 'exit_code', None)
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting session output: {e}")
+            return None
+    
+    def _is_tui_active(self, session) -> bool:
+        """Detect if a TUI application is currently active in the session.
+        
+        Args:
+            session: The terminal session
+            
+        Returns:
+            True if a TUI app is detected, False otherwise
+        """
+        try:
+            # Check if we have recent output that indicates TUI mode
+            if hasattr(session, 'output_buffer'):
+                recent_output = session.output_buffer[-3000:]  # Last 3000 chars
+                
+                # Look for TUI indicators in recent output
+                tui_indicators = [
+                    '\x1b[?1049h',  # Alternative screen buffer (vim, less, etc.)
+                    '\x1b[?47h',    # Alternative screen buffer (older)
+                    '\x1b[2J\x1b[H', # Clear screen + home cursor (common TUI pattern)
+                    '\x1b[?25l',    # Hide cursor (common in TUI apps)
+                    '\x1b[?1000h',  # Mouse tracking (TUI apps)
+                    '\x1b[?1002h',  # Mouse tracking (TUI apps)
+                    '\x1b[?1006h',  # Mouse tracking (TUI apps)
+                    '\x1b[2J',      # Clear screen (calculator apps)
+                    '\x1b[H\x1b[2J', # Home + clear (calculator apps)
+                ]
+                
+                # Count TUI indicators
+                tui_score = 0
+                for indicator in tui_indicators:
+                    if indicator in recent_output:
+                        tui_score += 1
+                
+                # If we have multiple TUI indicators, likely in TUI mode
+                if tui_score >= 1:  # Lowered threshold for calculator apps
+                    return True
+                
+                # Check for high frequency of escape sequences (TUI apps generate many)
+                escape_count = recent_output.count('\x1b[')
+                if escape_count > 20:  # High escape sequence density indicates TUI
+                    return True
+                
+                # Also check for vim-specific patterns
+                vim_patterns = [
+                    b'VIM - Vi IMproved',
+                    b'-- INSERT --',
+                    b'-- VISUAL --',
+                    b'~\r\n~\r\n~\r\n',  # Multiple tilde lines (vim empty buffer)
+                ]
+                
+                # Check for calculator-specific patterns
+                calc_patterns = [
+                    b'calculator',
+                    b'Calculator',
+                    b'[0-9]+\.[0-9]+',  # Decimal numbers (calculator display)
+                    b'[+\-*/=]',        # Math operators
+                ]
+                
+                recent_bytes = recent_output.encode('utf-8', errors='ignore')
+                for pattern in vim_patterns + calc_patterns:
+                    if pattern in recent_bytes:
+                        return True
+            
+            # Also check if screen buffer has been recently updated with structured content
+            if hasattr(session, 'screen_buffer'):
+                # If screen buffer has content that looks like a TUI interface
+                screen_content = session.screen_buffer.get_screen_content()
+                if screen_content and len(screen_content.strip()) > 100:
+                    # Check for TUI-like patterns in screen content
+                    lines = screen_content.split('\n')
+                    if len(lines) > 10:  # TUI apps usually have many lines
+                        # Look for patterns like vim's tilde lines or structured layout
+                        tilde_lines = sum(1 for line in lines if line.strip() == '~')
+                        if tilde_lines > 5:  # Vim shows many ~ lines
+                            return True
+                        
+                        # Look for calculator-like structured content
+                        # Calculator apps often have borders or structured displays
+                        border_chars = sum(1 for line in lines if any(c in line for c in '+-|='))
+                        if border_chars > 3:  # Structured display with borders
+                            return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error detecting TUI mode: {e}")
+            return False
+    
     def cleanup(self) -> None:
         """Clean up all sessions."""
         for session_id in list(self.sessions.keys()):

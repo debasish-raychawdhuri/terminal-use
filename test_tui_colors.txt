@@ -1,0 +1,5 @@
+This is a test of TUI display.
+Colors and vim interface should work properly.
+Line 3 of the testTesting TUI colors:
+Vim should preserve its interface colors
+No shell content should show through.

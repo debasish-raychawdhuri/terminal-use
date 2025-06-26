@@ -129,6 +129,39 @@ Get the current state of a terminal session rendered as HTML with proper ANSI co
 - **Complete HTML**: Generates full HTML documents with CSS styling
 - **Terminal styling**: Authentic terminal appearance with monospace fonts
 
+### 7. `show_session_live`
+Open a live visual terminal window that displays a terminal session in real-time (read-only).
+
+**Parameters:**
+- `session_id` (required): The terminal session ID to display
+- `title` (optional): Window title
+- `update_interval` (optional): Update interval in seconds (default: 0.2 = 200ms)
+- `width` (optional): Fallback terminal width if session dimensions unavailable (default: 100)
+- `height` (optional): Fallback terminal height if session dimensions unavailable (default: 40)
+
+**Features:**
+- **Actual terminal dimensions**: Uses the real dimensions from the terminal session, not forced parameters
+- **Real-time updates**: Window refreshes every 200ms by default
+- **Read-only display**: Visual terminal that shows live output without input capability
+- **Non-blocking**: Returns immediately while display runs in background thread
+- **Customizable**: Adjustable update frequency and window title
+- **Full color support**: Displays ANSI colors and formatting accurately
+- **Multiple displays**: Can show multiple sessions simultaneously
+- **Authentic layout**: Preserves the exact terminal layout and dimensions
+
+### 8. `list_live_displays`
+List all active live terminal displays.
+
+**Parameters:** None
+
+**Returns:** Information about all currently active live terminal windows.
+
+### 9. `stop_live_display`
+Stop a specific live terminal display.
+
+**Parameters:**
+- `display_id` (required): The display ID to stop (returned by `show_session_live`)
+
 ## Usage Examples
 
 ### Basic Command Execution
@@ -197,6 +230,45 @@ html_content = get_session_html(session_id="<session_id>", title="Colorful Direc
 - **Error handling**: Graceful fallback to plain text if conversion fails
 - **Performance**: Optimized processing for reliable operation
 - **Compatibility**: Works with all terminal applications and TUI programs
+
+### Live Terminal Display
+
+The `show_session_live` tool provides real-time visual terminal windows:
+
+```bash
+# Run a command that produces ongoing output
+run_command(
+    command="for i in {1..10}; do echo 'Line $i - $(date)'; sleep 1; done",
+    session_id="<session_id>",
+    use_terminal_emulator=True
+)
+
+# Show live terminal window (uses actual terminal dimensions)
+show_session_live(
+    session_id="<session_id>",
+    title="Live Output Demo",
+    update_interval=0.2  # Update every 200ms
+)
+
+# List all active live displays
+list_live_displays()
+
+# Stop a specific live display
+stop_live_display(display_id="<display_id>")
+```
+
+**Live Display Features:**
+- **Actual terminal dimensions**: Uses the real dimensions from the terminal session, not forced parameters
+- **Real-time updates**: Terminal content refreshes automatically
+- **Full color support**: Displays all ANSI colors and formatting (red, green, blue, yellow, etc.)
+- **TUI application support**: Properly handles vim, nano, htop, and other TUI applications
+- **Smart screen management**: Shows current screen for TUI apps, full history for shell sessions
+- **Clean display**: Filters out control sequences while preserving colors and formatting
+- **Non-blocking operation**: Returns immediately while window runs in background
+- **Multiple windows**: Can display multiple sessions simultaneously
+- **Customizable refresh rate**: Adjustable update intervals (default: 200ms)
+- **Read-only display**: Visual terminal that shows output without input capability
+- **Authentic layout**: Preserves the exact terminal layout and dimensions
 
 ## Troubleshooting
 

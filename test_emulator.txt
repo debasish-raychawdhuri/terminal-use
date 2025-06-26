@@ -1,0 +1,3 @@
+Terminal emulation working!
+Proper screen management!
+Colors and positioning correct!

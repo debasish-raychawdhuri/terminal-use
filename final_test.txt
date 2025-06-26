@@ -1,0 +1,5 @@
+Colors work!
+No escape sequences visible!
+TUI display is cleanThis is working!
+Vim display is clean!
+No more garbled text!!

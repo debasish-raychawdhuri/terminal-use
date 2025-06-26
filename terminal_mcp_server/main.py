@@ -15,6 +15,7 @@ from typing import Dict, List, Optional, Any
 from terminal_mcp_server.terminal_manager import TerminalManager
 from terminal_mcp_server.ansi_to_html_linear import convert_ansi_to_html_linear
 from terminal_mcp_server.ansi_to_text_2d import convert_ansi_to_text_2d, convert_ansi_to_text_linear
+from terminal_mcp_server.live_terminal_display import LiveTerminalManager
 
 # Configure logging to stderr to avoid interfering with stdio communication
 logging.basicConfig(
@@ -25,6 +26,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 terminal_manager = TerminalManager()
+live_terminal_manager = LiveTerminalManager()
 def get_tools_definition():
     """Get the tools definition for MCP protocol."""
     return [
@@ -157,6 +159,62 @@ def get_tools_definition():
                 },
                 "required": ["session_id"]
             }
+        },
+        {
+            "name": "show_session_live",
+            "description": "Open a live visual terminal window that displays a terminal session in real-time (read-only). The display uses the actual terminal dimensions from the session.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "The session ID for the terminal session to display"
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "Window title (optional)",
+                        "default": None
+                    },
+                    "update_interval": {
+                        "type": "number",
+                        "description": "Update interval in seconds (default: 0.2 = 200ms)",
+                        "default": 0.2
+                    },
+                    "width": {
+                        "type": "integer",
+                        "description": "Fallback terminal width in characters if session dimensions unavailable (default: 100)",
+                        "default": 100
+                    },
+                    "height": {
+                        "type": "integer",
+                        "description": "Fallback terminal height in characters if session dimensions unavailable (default: 40)",
+                        "default": 40
+                    }
+                },
+                "required": ["session_id"]
+            }
+        },
+        {
+            "name": "list_live_displays",
+            "description": "List all active live terminal displays",
+            "inputSchema": {
+                "type": "object",
+                "properties": {}
+            }
+        },
+        {
+            "name": "stop_live_display",
+            "description": "Stop a specific live terminal display",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "display_id": {
+                        "type": "string",
+                        "description": "The display ID to stop"
+                    }
+                },
+                "required": ["display_id"]
+            }
         }
     ]
 class MCPServer:
@@ -164,6 +222,7 @@ class MCPServer:
     
     def __init__(self):
         self.terminal_manager = terminal_manager
+        self.live_terminal_manager = live_terminal_manager
         self.running = True
         self.initialized = False
         
@@ -553,6 +612,126 @@ Raw output:
                                 "content": [{
                                     "type": "text",
                                     "text": f"Error generating text: {str(e)}"
+                                }]
+                            }
+                        }
+                
+                elif tool_name == "show_session_live":
+                    try:
+                        logger.debug(f"Starting live display for session {tool_args['session_id']}")
+                        
+                        result = self.live_terminal_manager.show_session_live(
+                            session_id=tool_args["session_id"],
+                            terminal_manager=self.terminal_manager,
+                            title=tool_args.get("title"),
+                            update_interval=tool_args.get("update_interval", 0.2),
+                            width=tool_args.get("width", 100),
+                            height=tool_args.get("height", 40)
+                        )
+                        
+                        if result["status"] == "started":
+                            response_text = f"Live terminal display started successfully!\n"
+                            response_text += f"Session ID: {result['session_id']}\n"
+                            response_text += f"Display ID: {result['display_id']}\n"
+                            response_text += f"Title: {result['title']}\n"
+                            response_text += f"Update Interval: {result['update_interval']}s\n"
+                            response_text += f"Dimensions: {result['dimensions']}\n"
+                            response_text += f"Message: {result['message']}"
+                        else:
+                            response_text = f"Failed to start live display: {result.get('error', 'Unknown error')}"
+                        
+                        return {
+                            "jsonrpc": "2.0",
+                            "id": req_id,
+                            "result": {
+                                "content": [{
+                                    "type": "text",
+                                    "text": response_text
+                                }]
+                            }
+                        }
+                        
+                    except Exception as e:
+                        logger.error(f"Error in show_session_live: {e}")
+                        return {
+                            "jsonrpc": "2.0",
+                            "id": req_id,
+                            "result": {
+                                "content": [{
+                                    "type": "text",
+                                    "text": f"Error starting live display: {str(e)}"
+                                }]
+                            }
+                        }
+                
+                elif tool_name == "list_live_displays":
+                    try:
+                        result = self.live_terminal_manager.list_displays()
+                        
+                        if result["count"] == 0:
+                            response_text = "No active live displays"
+                        else:
+                            response_text = f"Active live displays ({result['count']}):\n\n"
+                            for display in result["displays"]:
+                                response_text += f"Display ID: {display['display_id']}\n"
+                                response_text += f"  Session ID: {display['session_id']}\n"
+                                response_text += f"  Title: {display['title']}\n"
+                                response_text += f"  Update Interval: {display['update_interval']}s\n"
+                                response_text += f"  Running: {display['is_running']}\n\n"
+                        
+                        return {
+                            "jsonrpc": "2.0",
+                            "id": req_id,
+                            "result": {
+                                "content": [{
+                                    "type": "text",
+                                    "text": response_text
+                                }]
+                            }
+                        }
+                        
+                    except Exception as e:
+                        logger.error(f"Error in list_live_displays: {e}")
+                        return {
+                            "jsonrpc": "2.0",
+                            "id": req_id,
+                            "result": {
+                                "content": [{
+                                    "type": "text",
+                                    "text": f"Error listing displays: {str(e)}"
+                                }]
+                            }
+                        }
+                
+                elif tool_name == "stop_live_display":
+                    try:
+                        result = self.live_terminal_manager.stop_display(tool_args["display_id"])
+                        
+                        if result["status"] == "stopped":
+                            response_text = f"Live display stopped successfully: {result['display_id']}"
+                        else:
+                            response_text = f"Failed to stop display: {result.get('error', 'Unknown error')}"
+                        
+                        return {
+                            "jsonrpc": "2.0",
+                            "id": req_id,
+                            "result": {
+                                "content": [{
+                                    "type": "text",
+                                    "text": response_text
+                                }]
+                            }
+                        }
+                        
+                    except Exception as e:
+                        logger.error(f"Error in stop_live_display: {e}")
+                        return {
+                            "jsonrpc": "2.0",
+                            "id": req_id,
+                            "result": {
+                                "content": [{
+                                    "type": "text",
+                                    "text": f"Error stopping display: {str(e)}"
                                 }]
                             }
                         }
