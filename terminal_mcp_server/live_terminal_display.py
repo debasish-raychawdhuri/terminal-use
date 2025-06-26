@@ -270,6 +270,9 @@ class LiveTerminalWindow:
             
             print(f"[DEBUG] Processing content. TUI: {is_tui}, Length: {len(content)}")
             
+            # CRITICAL FIX: Ensure text widget is in correct state before rendering
+            self.text_widget.configure(state=tk.NORMAL)
+            
             # Render to the text widget
             self.terminal_emulator.render_to_tkinter(self.text_widget)
             

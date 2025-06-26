@@ -401,11 +401,15 @@ class TerminalScreenEmulator:
         # Clear existing content
         text_widget.delete(1.0, tk.END)
         
+        # Use timestamp to ensure unique tag names across renders
+        import time
+        tag_prefix = f"tag_{int(time.time() * 1000000)}"
+        tag_counter = 0
+        
         # Render each line
         for y, row in enumerate(self.screen):
             line_text = ""
             current_attrs = None
-            tag_counter = 0
             
             for x, cell in enumerate(row):
                 # Check if attributes changed
@@ -413,7 +417,7 @@ class TerminalScreenEmulator:
                 if attrs != current_attrs:
                     # Insert accumulated text with previous attributes
                     if line_text and current_attrs:
-                        tag_name = f"tag_{tag_counter}"
+                        tag_name = f"{tag_prefix}_{tag_counter}"
                         tag_counter += 1
                         self._configure_tag(text_widget, tag_name, current_attrs)
                         text_widget.insert(tk.END, line_text, tag_name)
@@ -426,7 +430,7 @@ class TerminalScreenEmulator:
             if line_text:
                 # Always apply color tags, even for "default" colors
                 # This ensures colors are properly displayed
-                tag_name = f"tag_{tag_counter}"
+                tag_name = f"{tag_prefix}_{tag_counter}"
                 tag_counter += 1
                 self._configure_tag(text_widget, tag_name, current_attrs)
                 text_widget.insert(tk.END, line_text, tag_name)
