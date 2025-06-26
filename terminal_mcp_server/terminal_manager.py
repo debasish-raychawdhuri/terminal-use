@@ -426,8 +426,9 @@ class TerminalManager:
         """
         try:
             # Check if we have recent output that indicates TUI mode
-            if hasattr(session, 'output_buffer'):
-                recent_output = session.output_buffer[-3000:]  # Last 3000 chars
+            # Use raw_output_buffer which contains ANSI sequences
+            if hasattr(session, 'raw_output_buffer'):
+                recent_output = session.raw_output_buffer[-3000:]  # Last 3000 chars
                 
                 # Look for TUI indicators in recent output
                 tui_indicators = [

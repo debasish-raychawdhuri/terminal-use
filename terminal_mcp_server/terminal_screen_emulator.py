@@ -72,25 +72,30 @@ class TerminalScreenEmulator:
         Args:
             content: Raw terminal content with ANSI sequences
         """
-        # Comprehensive ANSI sequence pattern that catches more edge cases
+        # More comprehensive ANSI sequence pattern
         # This pattern matches:
-        # - CSI sequences: \x1b[...letter (including ? and other parameters)
-        # - OSC sequences: \x1b]...(\x07 or \x1b\\)
-        # - Other escape sequences: \x1b followed by single character
-        pattern = r'(\x1b\[[?!>]?[0-9;:<=>?]*[a-zA-Z@`]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()#%*+].|\x1b[DEHMNOVWXZ78]|\x1b=|\x1b>)'
+        # - CSI sequences: \x1b[...letter (including parameters and private modes)
+        # - OSC sequences: \x1b]...(\x07 or \x1b\\) 
+        # - Other escape sequences
+        pattern = r'(\x1b\[[?!>]?[0-9;:<=>?]*[a-zA-Z@`]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()#%*+].|\x1b[DEHMNOVWXZ78]|\x1b=|\x1b>|\x1b\][^\\x07\\x1b]*\\x07)'
+        
+        # Split content into parts
         parts = re.split(pattern, content)
         
         for part in parts:
             if not part:  # Skip empty parts
                 continue
             elif part.startswith('\x1b['):
+                # CSI sequence - handle colors, cursor movement, etc.
                 self._handle_csi_sequence(part)
             elif part.startswith('\x1b]'):
+                # OSC sequence - ignore (window titles, etc.)
                 self._handle_osc_sequence(part)
             elif part.startswith('\x1b'):
-                # Handle other escape sequences (ignore them)
+                # Other escape sequences - ignore
                 pass
             else:
+                # Regular text - insert into screen buffer
                 self._insert_text(part)
     
     def _handle_csi_sequence(self, sequence: str):
@@ -419,13 +424,12 @@ class TerminalScreenEmulator:
             
             # Insert remaining text for this line
             if line_text:
-                if current_attrs and current_attrs != ('white', 'black', False, False):
-                    tag_name = f"tag_{tag_counter}"
-                    tag_counter += 1
-                    self._configure_tag(text_widget, tag_name, current_attrs)
-                    text_widget.insert(tk.END, line_text, tag_name)
-                else:
-                    text_widget.insert(tk.END, line_text)
+                # Always apply color tags, even for "default" colors
+                # This ensures colors are properly displayed
+                tag_name = f"tag_{tag_counter}"
+                tag_counter += 1
+                self._configure_tag(text_widget, tag_name, current_attrs)
+                text_widget.insert(tk.END, line_text, tag_name)
             
             # Add newline except for last line
             if y < len(self.screen) - 1:
